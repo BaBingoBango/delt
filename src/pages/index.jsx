@@ -14,6 +14,7 @@ import Card from '@mui/joy/Card';
 import Head from 'next/head';
 import {Directory} from "@/MDS";
 import {useRef} from 'react';
+import {Operations, Standards} from "@/SCD";
 
 export default function HomePageView() {
 
@@ -49,14 +50,16 @@ export default function HomePageView() {
         const directory = directoryRef.current;
 
         console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
-        directory.recruitNewAgent("Delta", "Chief of Staff to the User", "Chief", null, []);
+        const chiefAgentID = directory.recruitNewAgent(
+            "Delta", "Chief of Staff to the User", "Chief", null, []
+        );
 
         console.log("%c[System] [SIMS] Sending SIM to Agent Delta...", "background-color: #CBC3E3;");
-        // directory.sendSystemMessage()
+        Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
     };
 
     const handleSendClick = () => {
-        sendPrompt(input);
+        sendPrompt(input).then(() => {});
     };
 
     // View Body

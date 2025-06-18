@@ -43,7 +43,6 @@ class Directory {
             superiorID,
             subordinateIDs: subordinateIDs || []
         };
-        // TODO: NEXT: Now, we will have a single func -- "talkToAnAI" -- which takes in an agent object + prompt and returns the response
 
         // Add this agent to its superior's list of subordinates
         if (superiorID && this.agents.has(superiorID)) {
@@ -53,9 +52,16 @@ class Directory {
 
         // Finally, add the agent to the directory (map)
         this.agents.set(identifier, agent);
-        return agent;
+        return identifier;
+    }
+}
+
+class Scanning {
+    static scanAgentResponse(responseText, agentID) {
+        console.log("%c[System] [MDS] Scanning agent response...", "background-color: #CBC3E3;");
+        console.log(responseText);
     }
 }
 
 // Class Export
-export { Directory };
+export {Directory, Scanning};
