@@ -23,10 +23,15 @@ export default function HomePageView() {
     const [messages, setMessages] = useState([]);
     const [hasCreatedProject, setHasCreatedProject] = useState(false);
     const directoryRef = useRef(new Directory());
+    const shouldPrintSystemCallSpec = true;
 
     // View Functions
     useEffect(() => {
         console.log("%c[System] [UJS] Hi there! Welcome to delt! 👋", "background-color: #CBC3E3;");
+        if (shouldPrintSystemCallSpec) {
+            console.log("%c[System] [UJS] (Debug) System call spec:", "background-color: #CBC3E3;");
+            console.log(JSON.stringify(Standards.systemCallTypes, null, 2));
+        }
     }, []);
 
     const sendPrompt = async (promptToSend) => {
@@ -51,7 +56,7 @@ export default function HomePageView() {
 
         console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
         const chiefAgentID = directory.recruitNewAgent(
-            "Delta", "Chief of Staff to the User", "Chief", null, []
+            "Delta", "Chief of Staff to the User", Standards.agentRanks.CHIEF, null, []
         );
 
         console.log("%c[System] [SIMS] Sending SIM to Agent Delta...", "background-color: #CBC3E3;");

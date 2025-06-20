@@ -1,0 +1,33 @@
+{
+  "main_library": {
+    "exported_symbols": [
+      {
+        "data": {
+          "global": [
+            "_delt_docsVersionString",
+            "_delt_docsVersionNumber"
+          ]
+        }
+      }
+    ],
+    "flags": [
+      {
+        "attributes": [
+          "not_app_extension_safe"
+        ]
+      }
+    ],
+    "install_names": [
+      {
+        "name": "@rpath/delt_docs.framework/Versions/A/delt_docs"
+      }
+    ],
+    "target_info": [
+      {
+        "min_deployment": "18.5",
+        "target": "arm64-maccatalyst"
+      }
+    ]
+  },
+  "tapi_tbd_version": 5
+}
