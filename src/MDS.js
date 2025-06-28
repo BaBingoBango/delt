@@ -73,7 +73,6 @@ class Scanning {
         agent.chatHistory.push({
             role: "assistant",
             content: responseText,
-            timestamp: new Date().toISOString()
         });
         console.log(`%c[System] [MDS] Response saved to agent ${agentID}'s chat history.`, "color: green;");
 
@@ -198,7 +197,7 @@ class CallSubmissionAndValidation {
         }
 
         // Check if the agent is allowed to make this call
-        const securityPolicy = Standards.systemCallTypes[callType].securityPolicy;
+        const securityPolicy = Standards.systemCallTypes[callType.toUpperCase()].securityPolicy;
         return true; // TODO: For now, we assume all calls pass inspection. In the future, we can add more checks here.
     }
 }

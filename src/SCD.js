@@ -9,6 +9,9 @@ import {standardInitialMessage} from "../lib/SIM";
 import {chiefSystemPrompt} from "../lib/systemPrompts";
 import {Scanning} from "@/MDS";
 import {Templates} from "@/DSP";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import ClarificationForm from "@/ClarificationForm";
 
 class Standards {
     static agentRanks = {
@@ -53,6 +56,9 @@ class Standards {
         },
         BLANK_RESPONSE_WARNING: {
             name: "Blank Response Warning",
+        },
+        CLARIFICATION: {
+            name: "Clarification Result",
         }
     }
 
@@ -76,20 +82,20 @@ class Standards {
             name: "Refuse",
             description: "Refuse an order from the user or a superior agent due to safety or program policies",
             parameters: ["reasoning"],
-            securityPolicy: this.securityPolicies.NONE
+            securityPolicy: Standards.securityPolicies.NONE
         },
         CLARIFY: {
             name: "Clarify",
             description: "Request clarification from the user.",
             guidance: "Requires approval of all agent superiors. The questions and options arrays should be of equal length. If options are not provided (submit []), the questions should be open-ended.",
             parameters: ["reasoning", "questions", "options"],
-            securityPolicy: this.securityPolicies.ALL_SUPERIORS
+            securityPolicy: Standards.securityPolicies.ALL_SUPERIORS
         },
         RECRUIT: {
             name: "Recruit",
             description: "Request to recruit a new subordinate agent.",
             parameters: ["justification"],
-            securityPolicy: this.securityPolicies.RECRUITMENT
+            securityPolicy: Standards.securityPolicies.RECRUITMENT
         }
     }
 }
@@ -149,6 +155,15 @@ ${JSON.stringify(argumentsObject, null, 2)}
             },
         );
 
+        // Add the user message to the agent's history
+        recipient.chatHistory.push({
+            role: "user",
+            content: messageString,
+        });
+
+        // Get the system prompt
+        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
+
         // Send the message!
         console.log("%c[System] [SCD] Sending SIM message to Chief-rank agent...", "background-color: #CBC3E3;");
         const res = await fetch("/api/awakenAgent", {
@@ -157,7 +172,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                systemPrompt: Templates.getSystemPrompt(recipient.rank, recipient.team),
+                systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
             })
@@ -190,6 +205,15 @@ ${JSON.stringify(argumentsObject, null, 2)}
             },
         );
 
+        // Add the user message to the agent's history
+        recipient.chatHistory.push({
+            role: "user",
+            content: messageString,
+        });
+
+        // Get the system prompt
+        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
+
         // Send the message!
         console.log("%c[System] [SCD] Sending blank response warning message...", "background-color: #CBC3E3;");
         const res = await fetch("/api/awakenAgent", {
@@ -198,7 +222,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                systemPrompt: Templates.getSystemPrompt(recipient.rank, recipient.team),
+                systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
             })
@@ -226,10 +250,10 @@ ${JSON.stringify(argumentsObject, null, 2)}
             }
 
             // Switch off the type of system call
-            switch (eachParsedCall.type) {
-                case Standards.systemCallTypes.CLARIFY:
+            switch (eachParsedCall.type.toUpperCase()) {
+                case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
                     Operations.executeClarifyCall(directory, eachParsedCall, agentID); break;
-                case Standards.systemCallTypes.RECRUIT:
+                case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
                     Operations.executeRecruitCall(directory, eachParsedCall, agentID); break;
                 default:
                     throw new Error(`Cannot execute system call of type: ${eachParsedCall.type}. (type does not exist)`);
@@ -237,7 +261,81 @@ ${JSON.stringify(argumentsObject, null, 2)}
         }
     }
 
-    static executeClarifyCall(directory, parsedCall, agentID) {}
+    static executeClarifyCall(directory, parsedCall, agentID) {
+        console.log(`%c[System] [SCD] Executing Clarify call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+
+        const { questions, options } = parsedCall.payload;
+
+        // Create a container for the React component
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        const root = ReactDOM.createRoot(container);
+
+        const cleanup = () => {
+            root.unmount();
+            if (document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
+        };
+
+        const clarificationPromise = new Promise((resolve, reject) => {
+            const handleConfirm = (responses) => {
+                cleanup();
+                resolve(responses);
+            };
+
+            const handleCancel = () => {
+                cleanup();
+                reject(new Error("Clarification cancelled by user."));
+            };
+
+            const formElement = React.createElement(ClarificationForm, {
+                questions,
+                options,
+                onConfirm: handleConfirm,
+                onCancel: handleCancel,
+            });
+
+            root.render(formElement);
+        });
+
+        clarificationPromise.then(responses => {
+            console.log("%c[System] [SCD] User provided clarification:", "background-color: #90EE90;", responses);
+            // TODO: Send a system message back to the original calling agent with the user's responses.
+            const responseMessage = Operations.produceSystemMessageString(
+                agentID,
+                Standards.systemMessageTypes.CLARIFICATION,
+                parsedCall.id,
+                "scd",
+                {
+                    responses: responses
+                }
+            );
+            const recipient = directory.agents.get(agentID);
+            // Add the user message to the agent's history
+            recipient.chatHistory.push({
+                role: "user",
+                content: responseMessage,
+            });
+            Templates.getSystemPrompt(recipient.rank, recipient.team).then(systemPrompt => {
+                return fetch("/api/awakenAgent", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        systemPrompt: systemPrompt,
+                        chatPrompt: responseMessage,
+                        chatHistory: recipient.chatHistory,
+                    })
+                });
+            });
+        }).catch(error => {
+            console.warn(`%c[System] [SCD] Clarification failed: ${error.message}`, "color: orange;");
+            // TODO: Send a system message back to the original calling agent with the failure.
+        });
+    }
 
     static executeRecruitCall(directory, parsedCall, agentID) {}
 }

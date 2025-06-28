@@ -25,18 +25,23 @@ export default async function handler(req, res) {
 
     try {
         // Ensure required parameters are provided
-        const {systemPrompt, chatPrompt, chatHistory} = req.body;
-        if (!systemPrompt || !chatPrompt || !chatHistory) {
-            return res.status(400).json({ error: "Error: Requires parameters systemPrompt, chatHistory, and prompt" });
+        const {systemPrompt, chatHistory} = req.body;
+        if (!systemPrompt || !chatHistory) {
+            return res.status(400).json({ error: "Error: Requires parameters systemPrompt and chatHistory" });
         }
         console.log("%c[System] [awakenAgent.js] Required parameters are present.", "background-color: #CBC3E3;");
+
+        // Clean the chat history to only include role and content, and map 'assistant' to 'model'.
+        const messages = chatHistory.map(message => ({
+            role: message.role === 'assistant' ? 'model' : message.role,
+            content: [{text: message.content}],
+        }));
 
         // Generate!
         console.log("%c[System] [awakenAgent.js] Generating...", "background-color: #CBC3E3;");
         const APIresponse = await ai.generate({
             system: systemPrompt,
-            prompt: chatPrompt,
-            messages: chatHistory,
+            messages: messages,
         });
         const agentResponse = APIresponse.text;
 
@@ -45,7 +50,7 @@ export default async function handler(req, res) {
         console.log("%c[System] [awakenAgent.js] API responded with no errors. Response:", "background-color: #CBC3E3;");
         console.log(agentResponse);
 
-    // Handle errors by printing and with a code 500
+        // Handle errors by printing and with a code 500
     } catch(exception) {
         console.error("[System] [awakenAgent.js] ", exception);
         res.status(500).json({ error: `An error occurred while communicating with the AI model. ${exception}` });
