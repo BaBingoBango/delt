@@ -12,6 +12,7 @@ import {Templates} from "@/DSP";
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import ClarificationForm from "@/ClarificationForm";
+import RecruitmentForm from "@/RecruitmentForm";
 
 class Standards {
     static agentRanks = {
@@ -35,6 +36,15 @@ class Standards {
         }
     }
 
+    static rankHierarchy = [
+        "CHIEF",
+        "DIRECTOR",
+        "SUPERVISOR",
+        "ATTENDANT",
+        "SENIOR_ANALYST",
+        "JUNIOR_ANALYST"
+    ];
+
     static agentTeams = {
         HEARTS: {
             name: "Hearts"
@@ -57,8 +67,8 @@ class Standards {
         BLANK_RESPONSE_WARNING: {
             name: "Blank Response Warning",
         },
-        CLARIFICATION: {
-            name: "Clarification Result",
+        CALL_RESULTS: {
+            name: "Call Results",
         }
     }
 
@@ -74,6 +84,9 @@ class Standards {
         },
         RECRUITMENT: {
             description: "Requires approval from every superior as well as the user. Exception: The Chief-rank agent can have up to two Director-rank agents without approval",
+        },
+        CHIEF_ONLY: {
+            description: "Only the Chief-rank agent can use this call.",
         }
     }
 
@@ -93,14 +106,57 @@ class Standards {
         },
         RECRUIT: {
             name: "Recruit",
-            description: "Request to recruit a new subordinate agent.",
-            parameters: ["justification"],
+            description: "Request to recruit a new direct subordinate agent. The rank will be one lower than the caller's rank. The title is caller-chosen and should describe the role of the new agent.",
+            parameters: ["justification", "title"],
             securityPolicy: Standards.securityPolicies.RECRUITMENT
+        },
+        ORDER: {
+            name: "Order",
+            description: "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Will fail if there are no subordinates.",
+            parameters: ["orderString"],
+            securityPolicy: Standards.securityPolicies.NONE
+        },
+        PHASE: {
+            name: "Phase",
+            description: "Request to move from the Planning to Execution phase.",
+            parameters: ["justification", "depString"],
+            securityPolicy: Standards.securityPolicies.CHIEF_ONLY
         }
     }
 }
 
 class Operations {
+    // A list of random names for new agents.
+    static randomAgentNames = [
+        "Krennic",
+        "Tarkin",
+        "Thrawn",
+        "Vader",
+        "Meero",
+        "Heert",
+        "Jung",
+        "Lagret",
+        "Gideon",
+        "Pryce",
+        "Yularen",
+        "Motti",
+        "Tagge",
+        "Ozzel",
+        "Vanto",
+        "Kallus",
+        "Rax",
+        "Sloane",
+        "Drayven",
+        "Valerius",
+        "Kaelen",
+        "Seratt",
+        "Vorne",
+        "Joric",
+        "Lystra",
+        "Grymm",
+        "Orland",
+    ];
+
     // Constructs a standardized system message string for sending to agents.
     static produceSystemMessageString(recipientID, type, messageID, sender, argumentsObject) {
         // Ensure the type is valid
@@ -236,57 +292,165 @@ ${JSON.stringify(argumentsObject, null, 2)}
         Scanning.scanAgentResponse(directory, json.response, recipientID);
     }
 
+    static async sendCallResultsMessage(directory, recipientID, results) {
+        // Ensure the recipient exists
+        if (!directory.agents.has(recipientID)) {
+            throw new Error(`Cannot send call results to agent with ID ${recipientID}. (does not exist)`);
+        }
+        const recipient = directory.agents.get(recipientID);
+
+        // Construct a system message string
+        const messageString = Operations.produceSystemMessageString(
+            recipientID,
+            Standards.systemMessageTypes.CALL_RESULTS,
+            `CALL_RESULTS-${new Date().toISOString()}`,
+            "scd",
+            {
+                results: results
+            }
+        );
+
+        // Add the user message to the agent's history
+        recipient.chatHistory.push({
+            role: "user",
+            content: messageString,
+        });
+
+        // Get the system prompt
+        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
+
+        // Send the message!
+        console.log(`%c[System] [SCD] Sending aggregated call results to agent ${recipientID}...`, "background-color: #CBC3E3;");
+        const res = await fetch("/api/awakenAgent", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                systemPrompt: systemPrompt,
+                chatPrompt: messageString,
+                chatHistory: recipient.chatHistory,
+            })
+        });
+        if (!res.ok) {
+            throw new Error("Failed to send system message. (API request failed)");
+        }
+
+        // Process the response!
+        const json = await res.json();
+        Scanning.scanAgentResponse(directory, json.response, recipientID);
+    }
+
     // Executes a system call package on behalf of an agent. Presumes calls are well-formed; checks for cleared status.
-    static executeSystemCalls(directory, parsedCalls, agentID) {
+    static async executeSystemCalls(directory, parsedCalls, agentID) {
         // Ensure the agent exists
         if (!directory.agents.has(agentID)) {
             throw new Error(`Cannot execute system calls for agent with ID ${agentID}. (does not exist)`);
         }
 
-        // Loop through each parsed call in message attach order (default)
-        for (const eachParsedCall of parsedCalls) {
-            if (!eachParsedCall.hasClearedInspection) {
-                throw new Error(`Cannot execute system call ID ${eachParsedCall.id}. (has not cleared inspection)`);
+        const interactiveCalls = [];
+        const backgroundCalls = [];
+
+        // Separate calls into interactive and background tasks
+        for (const call of parsedCalls) {
+            if (!call.hasClearedInspection) {
+                console.warn(`Cannot execute system call ID ${call.id}. (has not cleared inspection)`);
+                continue;
             }
 
-            // Switch off the type of system call
-            switch (eachParsedCall.type.toUpperCase()) {
+            switch (call.type.toUpperCase()) {
                 case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
-                    Operations.executeClarifyCall(directory, eachParsedCall, agentID); break;
                 case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
-                    Operations.executeRecruitCall(directory, eachParsedCall, agentID); break;
+                case Standards.systemCallTypes.PHASE.name.toUpperCase():
+                    interactiveCalls.push(call);
+                    break;
                 default:
-                    throw new Error(`Cannot execute system call of type: ${eachParsedCall.type}. (type does not exist)`);
+                    backgroundCalls.push(call);
+                    break;
+            }
+        }
+
+        // Execute background calls (can be done in parallel if they are independent)
+        for (const call of backgroundCalls) {
+            // For now, we don't have background calls, but this is where they would be handled.
+            console.log(`%c[System] [SCD] Executing background call: ${call.type}`, "background-color: #CBC3E3;");
+        }
+
+        // Execute interactive calls sequentially and collect results
+        if (interactiveCalls.length > 0) {
+            const results = await Operations.executeInteractiveCalls(directory, interactiveCalls, agentID);
+            if (results.length > 0) {
+                await Operations.sendCallResultsMessage(directory, agentID, results);
             }
         }
     }
 
-    static executeClarifyCall(directory, parsedCall, agentID) {
-        console.log(`%c[System] [SCD] Executing Clarify call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
-
-        const { questions, options } = parsedCall.payload;
-
-        // Create a container for the React component
-        const container = document.createElement('div');
-        document.body.appendChild(container);
-
-        const root = ReactDOM.createRoot(container);
-
-        const cleanup = () => {
-            root.unmount();
-            if (document.body.contains(container)) {
-                document.body.removeChild(container);
+    static async executeInteractiveCalls(directory, interactiveCalls, agentID) {
+        console.log(`%c[System] [SCD] Beginning interactive session for agent ${agentID} with ${interactiveCalls.length} calls.`, "background-color: #CBC3E3;");
+        const results = [];
+        for (const call of interactiveCalls) {
+            try {
+                let result;
+                switch (call.type.toUpperCase()) {
+                    case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
+                        result = await Operations.executeClarifyCall(directory, call, agentID);
+                        break;
+                    case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
+                        result = await Operations.executeRecruitCall(directory, call, agentID);
+                        break;
+                    case Standards.systemCallTypes.PHASE.name.toUpperCase():
+                        // TODO: Implement Phase call execution
+                        break;
+                }
+                if (result) {
+                    results.push(result);
+                }
+            } catch (error) {
+                console.error(`%c[System] [SCD] Failed to execute interactive call ${call.id} of type ${call.type}. Error: ${error.message}`, "color: red;");
+                // TODO: Send a system message back to the original calling agent with the failure.
+                results.push({
+                    callID: call.id,
+                    status: "FAILED",
+                    error: error.message
+                });
             }
-        };
+        }
+        console.log(`%c[System] [SCD] Interactive session for agent ${agentID} complete.`, "background-color: #CBC3E3;");
+        return results;
+    }
 
-        const clarificationPromise = new Promise((resolve, reject) => {
+    static executeClarifyCall(directory, parsedCall, agentID) {
+        return new Promise((resolve, reject) => {
+            console.log(`%c[System] [SCD] Executing Clarify call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+
+            const { questions, options } = parsedCall.payload;
+
+            // Create a container for the React component
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            const root = ReactDOM.createRoot(container);
+
+            const cleanup = () => {
+                root.unmount();
+                if (document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+            };
+
             const handleConfirm = (responses) => {
                 cleanup();
-                resolve(responses);
+                console.log("%c[System] [SCD] User provided clarification:", "background-color: #90EE90;", responses);
+                resolve({
+                    callID: parsedCall.id,
+                    status: "SUCCESS",
+                    responses: responses
+                });
             };
 
             const handleCancel = () => {
                 cleanup();
+                console.warn(`%c[System] [SCD] Clarification cancelled by user.`, "color: orange;");
                 reject(new Error("Clarification cancelled by user."));
             };
 
@@ -299,45 +463,84 @@ ${JSON.stringify(argumentsObject, null, 2)}
 
             root.render(formElement);
         });
-
-        clarificationPromise.then(responses => {
-            console.log("%c[System] [SCD] User provided clarification:", "background-color: #90EE90;", responses);
-            // TODO: Send a system message back to the original calling agent with the user's responses.
-            const responseMessage = Operations.produceSystemMessageString(
-                agentID,
-                Standards.systemMessageTypes.CLARIFICATION,
-                parsedCall.id,
-                "scd",
-                {
-                    responses: responses
-                }
-            );
-            const recipient = directory.agents.get(agentID);
-            // Add the user message to the agent's history
-            recipient.chatHistory.push({
-                role: "user",
-                content: responseMessage,
-            });
-            Templates.getSystemPrompt(recipient.rank, recipient.team).then(systemPrompt => {
-                return fetch("/api/awakenAgent", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        systemPrompt: systemPrompt,
-                        chatPrompt: responseMessage,
-                        chatHistory: recipient.chatHistory,
-                    })
-                });
-            });
-        }).catch(error => {
-            console.warn(`%c[System] [SCD] Clarification failed: ${error.message}`, "color: orange;");
-            // TODO: Send a system message back to the original calling agent with the failure.
-        });
     }
 
-    static executeRecruitCall(directory, parsedCall, agentID) {}
+    static executeRecruitCall(directory, parsedCall, agentID) {
+        return new Promise((resolve, reject) => {
+            console.log(`%c[System] [SCD] Executing Recruit call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+
+            const callingAgent = directory.agents.get(agentID);
+            const currentRankIndex = Standards.rankHierarchy.indexOf(callingAgent.rank.name.toUpperCase().replace(' ', '_'));
+
+            if (currentRankIndex === -1 || currentRankIndex === Standards.rankHierarchy.length - 1) {
+                return reject(new Error("Calling agent has the lowest rank and cannot recruit."));
+            }
+
+            const newAgentRankName = Standards.rankHierarchy[currentRankIndex + 1];
+            const newAgentRank = Standards.agentRanks[newAgentRankName];
+            const newAgentCallSign = Operations.randomAgentNames[Math.floor(Math.random() * Operations.randomAgentNames.length)];
+            const newAgentTeam = Standards.agentTeams[Object.keys(Standards.agentTeams)[Math.floor(Math.random() * Object.keys(Standards.agentTeams).length)]];
+
+            const { justification, title } = parsedCall.payload;
+
+            const newAgentDetails = {
+                callSign: newAgentCallSign,
+                title: title,
+                rank: newAgentRank,
+                team: newAgentTeam
+            };
+
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const root = ReactDOM.createRoot(container);
+
+            const cleanup = () => {
+                root.unmount();
+                if (document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+            };
+
+            const handleConfirm = () => {
+                cleanup();
+                console.log("%c[System] [SCD] User approved recruitment:", "background-color: #90EE90;", newAgentDetails);
+                try {
+                    const newAgentID = directory.recruitNewAgent(
+                        newAgentDetails.callSign,
+                        newAgentDetails.title,
+                        newAgentDetails.rank,
+                        agentID,
+                        [],
+                        newAgentDetails.team
+                    );
+                    console.log(`%c[System] [SCD] Successfully recruited new agent with ID: ${newAgentID}`, "background-color: #90EE90;");
+                    resolve({
+                        callID: parsedCall.id,
+                        status: "SUCCESS",
+                        details: `Recruitment approved. New agent ${newAgentDetails.callSign} (${newAgentID}) has been recruited with rank ${newAgentDetails.rank.name}.`
+                    });
+                } catch (error) {
+                    console.error(`%c[System] [SCD] Failed to recruit new agent. Error: ${error.message}`, "color: red;");
+                    reject(error);
+                }
+            };
+
+            const handleCancel = () => {
+                cleanup();
+                console.warn(`%c[System] [SCD] Recruitment denied by user.`, "color: orange;");
+                reject(new Error("Recruitment denied by user."));
+            };
+
+            const formElement = React.createElement(RecruitmentForm, {
+                justification,
+                newAgentDetails,
+                onConfirm: handleConfirm,
+                onCancel: handleCancel,
+            });
+
+            root.render(formElement);
+        });
+    }
 }
 
 // Class Export

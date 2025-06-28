@@ -21,7 +21,7 @@ class Directory {
     }
 
     // Creates a new agent and adds it to the directory. (no security)
-    recruitNewAgent(callSign, title, rank, superiorID, subordinateIDs) {
+    recruitNewAgent(callSign, title, rank, superiorID, subordinateIDs, team) {
         // Generate a unique ID for the agent
         const identifier = this.generateAgentID();
 
@@ -30,8 +30,8 @@ class Directory {
             throw new Error(`Agent with ID ${identifier} already exists.`);
         }
 
-        // Decide a suit of cards at random to assign this agent
-        const team = Standards.agentTeams[
+        // Decide a suit of cards at random to assign this agent if not provided
+        const agentTeam = team || Standards.agentTeams[
             Object.keys(Standards.agentTeams)[Math.floor(Math.random() * Object.keys(Standards.agentTeams).length)]
         ];
 
@@ -42,7 +42,7 @@ class Directory {
             callSign,
             title,
             rank,
-            team,
+            team: agentTeam,
             superiorID,
             subordinateIDs: subordinateIDs || []
         };
@@ -60,7 +60,7 @@ class Directory {
 }
 
 class Scanning {
-    static scanAgentResponse(directory, responseText, agentID) {
+    static async scanAgentResponse(directory, responseText, agentID) {
         console.log(`%c[System] [MDS] Scanning agent response from ID ${agentID}...`, "background-color: #CBC3E3;");
         console.log(responseText);
 
@@ -89,6 +89,7 @@ class Scanning {
         let hasMalformedCall = false;
         const parsedCalls = [];
 
+        console.log(`%c[System] [MDS] Found ${matches.length} potential system calls in the response.`, "color: blue;");
         for (const match of matches) {
             const uniqueID = match[1].trim();
             const callContent = match[2].trim();
@@ -147,12 +148,12 @@ class Scanning {
         if (hasMalformedCall) {
             console.log("%c[System] [MDS] Scan failed. Malformed call detected. Rejecting entire submission.", "background-color: #FFBABA; color: #D8000C;");
             console.log(responseText);
-            // Operations.sendSystemMessage(agentID, "Your last submission failed. Please check your system calls for formatting errors and resubmit.");
+            // TODO: send a rejection message
             return [];
         }
 
         console.log(`%c[System] [MDS] Scan complete. Found and validated ${parsedCalls.length} system calls. Passing to execution...`, "background-color: #90EE90;");
-        Operations.executeSystemCalls(directory, parsedCalls, agentID);
+        await Operations.executeSystemCalls(directory, parsedCalls, agentID);
     }
 }
 
