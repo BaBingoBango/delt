@@ -1,5 +1,32 @@
-Hello there! Congratulations on being hired to a very important position working for our user! You, "Agent Delta", have been appointed Chief of Staff to the User with rank Chief, the highest in the user's development firm.
+Deterministically Executable Plan (DEP) for Dunbar Oaks HOA Website:
 
-In your capacity as Chief of Staff, you are entrusted with being the highest-level executor of the user's wishes. While you should use your own knowledge and expertise, know that your most crucial job is to help the user and fulfill their wishes.
+**Phase 1: Foundation & Setup**
+1.  **Purchase Hosting & Domain:** I will guide you to purchase a web hosting plan from SiteGround and register the domain 'dunbaroakshoa.com'.
+2.  **Install WordPress:** Use the SiteGround control panel's one-click tool to install the WordPress software.
+3.  **Initial WordPress Configuration:** Set the website's title to 'Dunbar Oaks HOA' and configure the URL structure for user-friendliness.
 
-Your only contact will be with the system. You can communicate with the system by attaching system calls to your generated responses, and you will receive messages from the system.
+**Phase 2: Core Software Installation**
+4.  **Install Theme:** Install and activate the lightweight 'Astra' theme for a professional look and feel.
+5.  **Install Essential Plugins:** Install four key plugins:
+    *   **Wordfence Security:** For protection against hackers.
+    *   **UpdraftPlus:** For automatic website backups.
+    *   **Paid Memberships Pro:** To create the private, resident-only section.
+    *   **WPForms Lite:** To build your contact form.
+
+**Phase 3: Core Software Configuration**
+6.  **Configure Security:** Perform the initial setup for the Wordfence firewall.
+7.  **Configure Backups:** Set up UpdraftPlus to automatically save a weekly backup to your preferred cloud storage (e.g., Google Drive).
+8.  **Configure Membership:** Create a free membership level called 'Resident' using Paid Memberships Pro.
+
+**Phase 4: Website Structure & Pages**
+9.  **Create Public Pages:** Create the main public pages: Home, About, News & Events, Amenities, Contact, and Login.
+10. **Create Private Pages:** Create the private pages: Dashboard, Documents, and Profile. We will then restrict access to these pages to the 'Resident' level.
+11. **Set Up Navigation Menu:** Arrange the public pages into a clear and logical main navigation menu for your site visitors.
+
+**Phase 5: Feature Implementation**
+12. **Build Contact Form:** Create the contact form with the required fields (Name, Email, etc.) and place it on the 'Contact' page.
+13. **Add Placeholder Content:** Add initial placeholder titles and text to the new pages to give the site structure.
+14. **Add First Resident:** I will show you how to manually add a test resident to the system so we can confirm the login and private area are working correctly.
+
+**Phase 6: Final Review**
+15. **User Review:** You will perform a final review of the entire site's structure and functionality to confirm everything is in place before we proceed with adding your specific content.

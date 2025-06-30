@@ -5,54 +5,104 @@
 //  Copyright © 2025 Chorale LLC
 //
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Box from '@mui/joy/Box';
 import Button from '@mui/joy/Button';
-import Textarea from '@mui/joy/Textarea';
 import Typography from '@mui/joy/Typography';
 import Card from '@mui/joy/Card';
 import Head from 'next/head';
-import {Directory} from "@/MDS";
-import {useRef} from 'react';
-import {Operations, Standards} from "@/SCD";
+import { Directory } from "@/MDS";
+import { Operations, Standards } from "@/SCD";
+import List from '@mui/joy/List';
+import ListItem from '@mui/joy/ListItem';
+import ListItemContent from '@mui/joy/ListItemContent';
+import CircularProgress from '@mui/joy/CircularProgress';
+import Chip from '@mui/joy/Chip';
+
+function AgentCard({ agent }) {
+    const getStatusChip = (status) => {
+        switch (status) {
+            case 'Generating...':
+                return (
+                    <Chip
+                        variant="soft"
+                        color="warning"
+                        startDecorator={<CircularProgress size="sm" color="warning" />}
+                    >
+                        Generating...
+                    </Chip>
+                );
+            case 'Idle':
+                return <Chip variant="soft" color="success">Idle</Chip>;
+            default:
+                return <Chip variant="soft" color="neutral">{status}</Chip>;
+        }
+    };
+
+    return (
+        <Card variant="outlined" sx={{ mb: 1 }}>
+            <ListItemContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        <Typography level="title-md">{agent.callSign} ({agent.rank.name})</Typography>
+                        <Typography level="body-sm">{agent.title}</Typography>
+                        <Typography level="body-xs" textColor="text.tertiary">{agent.identifier}</Typography>
+                    </Box>
+                    {getStatusChip(agent.status)}
+                </Box>
+            </ListItemContent>
+        </Card>
+    );
+}
+
+function formatElapsedTime(seconds) {
+    const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+}
 
 export default function HomePageView() {
-
-    // View Variables
-    const [input, setInput] = useState('');
-    const [messages, setMessages] = useState([]);
     const [hasCreatedProject, setHasCreatedProject] = useState(false);
-    const directoryRef = useRef(new Directory());
-    const shouldPrintSystemCallSpec = true;
+    const [agents, setAgents] = useState([]);
+    const [elapsedTime, setElapsedTime] = useState(0);
+    const directoryRef = useRef(null);
+    const timerRef = useRef(null);
 
-    // View Functions
     useEffect(() => {
         console.log("%c[System] [UJS] Hi there! Welcome to delt! 👋", "background-color: #CBC3E3;");
-        if (shouldPrintSystemCallSpec) {
-            console.log("%c[System] [UJS] (Debug) System call spec:", "background-color: #CBC3E3;");
-            console.log(JSON.stringify(Standards.systemCallTypes, null, 2));
-        }
+        console.log("%c[System] [UJS] (Debug) System call spec:", "background-color: #CBC3E3;");
+        console.log(JSON.stringify(Standards.systemCallTypes, null, 2));
     }, []);
 
-    const sendPrompt = async (promptToSend) => {
-        if (!promptToSend.trim()) return;
-        setMessages(prev => [...prev, { user: promptToSend, carol: 'Thinking...' }]);
-        const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: promptToSend }),
-        });
-        const { reply } = await res.json();
-        setMessages(prev => prev.map((msg, idx) =>
-            idx === prev.length - 1 ? { ...msg, carol: reply } : msg
-        ));
-        setInput('');
-    };
+    useEffect(() => {
+        if (hasCreatedProject) {
+            timerRef.current = setInterval(() => {
+                setElapsedTime(prevTime => prevTime + 1);
+            }, 1000);
+        } else {
+            clearInterval(timerRef.current);
+        }
+        return () => clearInterval(timerRef.current);
+    }, [hasCreatedProject]);
 
     const executeSIMS = async () => {
         setHasCreatedProject(true);
         console.log("%c[System] [SIMS] Accessing new, empty directory...", "background-color: #CBC3E3;");
-        const directory = directoryRef.current;
+
+        const directory = new Directory();
+        directoryRef.current = directory;
+
+        directory.setUpdateCallback((updatedAgents) => {
+            setAgents([...updatedAgents]);
+        });
+
+        directory.setAgentStatus = function(agentId, status) {
+            if (this.agents.has(agentId)) {
+                this.agents.get(agentId).status = status;
+                this.triggerUpdate();
+            }
+        }.bind(directory);
 
         console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
         const chiefAgentID = directory.recruitNewAgent(
@@ -63,15 +113,10 @@ export default function HomePageView() {
         Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
     };
 
-    const handleSendClick = () => {
-        sendPrompt(input).then(() => {});
-    };
-
-    // View Body
     return (
         <Box
             sx={{
-                maxWidth: 600,
+                maxWidth: 800,
                 mx: 'auto',
                 py: 4,
                 px: 2,
@@ -84,31 +129,30 @@ export default function HomePageView() {
                 <title>delt</title>
             </Head>
 
-            <Typography level="h2">delt</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography level="h2">delt</Typography>
+                {hasCreatedProject && (
+                    <Chip color="primary" variant="soft">
+                        <Typography level="body-sm" sx={{ fontFamily: 'monospace' }}>
+                            Elapsed Time: {formatElapsedTime(elapsedTime)}
+                        </Typography>
+                    </Chip>
+                )}
+            </Box>
 
             {!hasCreatedProject ? (
-                <Button onClick={executeSIMS}>Create Project</Button>
+                <Card>
+                    <Typography level="body-md" sx={{mb: 2}}>Welcome to delt. Click the button below to create a new project and hire the initial Chief agent.</Typography>
+                    <Button onClick={executeSIMS}>Create Project</Button>
+                </Card>
             ) : (
                 <>
-                    <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2 }}>
-                        <Textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Type your message here..."
-                            minRows={2}
-                            sx={{ mr: 1, flexGrow: 1 }}
-                        />
-                        <Button onClick={handleSendClick} sx={{ ml: 'auto' }}>Send</Button>
-                    </Box>
-
-                    <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {messages.map((msg, idx) => (
-                            <Card key={idx} variant="outlined">
-                                <Typography level="body2"><strong>You:</strong> {msg.user}</Typography>
-                                <Typography level="body2" sx={{ mt: 1 }}><strong>API:</strong> {msg.carol}</Typography>
-                            </Card>
+                    <Typography level="h4">Agent Roster</Typography>
+                    <List>
+                        {agents.map((agent) => (
+                            <AgentCard key={agent.identifier} agent={agent} />
                         ))}
-                    </Box>
+                    </List>
                 </>
             )}
         </Box>

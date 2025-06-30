@@ -10,6 +10,19 @@ import {Operations, Standards} from "@/SCD";
 class Directory {
     constructor() {
         this.agents = new Map();
+        this.updateCallback = null;
+        this.processedCallIDs = new Set();
+        this.messageLog = [];
+    }
+
+    setUpdateCallback(callback) {
+        this.updateCallback = callback;
+    }
+
+    triggerUpdate() {
+        if (this.updateCallback) {
+            this.updateCallback(Array.from(this.agents.values()));
+        }
     }
 
     generateAgentID() {
@@ -44,7 +57,9 @@ class Directory {
             rank,
             team: agentTeam,
             superiorID,
-            subordinateIDs: subordinateIDs || []
+            subordinateIDs: subordinateIDs || [],
+            pendingOrders: [],
+            status: 'Idle'
         };
 
         // Add this agent to its superior's list of subordinates
@@ -55,6 +70,7 @@ class Directory {
 
         // Finally, add the agent to the directory (map)
         this.agents.set(identifier, agent);
+        this.triggerUpdate();
         return identifier;
     }
 }
@@ -80,6 +96,11 @@ class Scanning {
         const matches = [...responseText.matchAll(callRegex)];
 
         if (matches.length === 0) {
+            const agent = directory.agents.get(agentID);
+            if (agent && agent.pendingOrders && agent.pendingOrders.length > 0) {
+                console.log(`%c[System] [MDS] Scan complete. No system calls found, but agent has pending orders. Allowing blank response.`, "color: gray;");
+                return [];
+            }
             console.log("%c[System] [MDS] Scan complete. No system calls were found.", "color: gray;");
             console.log(responseText);
             Operations.sendSystemMessage(directory, agentID, Standards.systemMessageTypes.BLANK_RESPONSE_WARNING)
@@ -89,11 +110,11 @@ class Scanning {
         let hasMalformedCall = false;
         const parsedCalls = [];
 
-        console.log(`%c[System] [MDS] Found ${matches.length} potential system calls in the response.`, "color: blue;");
+        console.log(`%c[System] [MDS] Found ${matches.length} potential system calls in the response. Beginning validation pass...`, "color: blue;");
         for (const match of matches) {
             const uniqueID = match[1].trim();
             const callContent = match[2].trim();
-            console.log(`%c[System] [MDS] Found potential system call with ID: ${uniqueID}`, "color: blue;");
+            console.log(`%c[System] [MDS] Validating potential system call with ID: ${uniqueID}`, "color: blue;");
 
             try {
                 // (1) Parse & confirm type
@@ -146,13 +167,12 @@ class Scanning {
         }
 
         if (hasMalformedCall) {
-            console.log("%c[System] [MDS] Scan failed. Malformed call detected. Rejecting entire submission.", "background-color: #FFBABA; color: #D8000C;");
-            console.log(responseText);
-            // TODO: send a rejection message
-            return [];
+            console.log("%c[System] [MDS] Scan failed. Malformed call detected. Rejecting entire submission and notifying agent.", "background-color: #FFBABA; color: #D8000C;");
+            Operations.sendMalformedCallWarningMessage(directory, agentID, responseText);
+            return;
         }
 
-        console.log(`%c[System] [MDS] Scan complete. Found and validated ${parsedCalls.length} system calls. Passing to execution...`, "background-color: #90EE90;");
+        console.log(`%c[System] [MDS] Scan complete. All ${parsedCalls.length} system calls passed validation. Passing to execution...`, "background-color: #90EE90;");
         await Operations.executeSystemCalls(directory, parsedCalls, agentID);
     }
 }
@@ -197,9 +217,41 @@ class CallSubmissionAndValidation {
             return false;
         }
 
+        // Specific call validation
+        switch (type.toUpperCase()) {
+            case Standards.systemCallTypes.ORDER.name.toUpperCase():
+                const recipientAgent = directory.agents.get(payload.recipientAgentID);
+                if (!recipientAgent) {
+                    console.warn(`%c[System] [MDS] Order call ${id} failed: recipient agent ${payload.recipientAgentID} does not exist.`, "color: red;");
+                    return false;
+                }
+                if (recipientAgent.superiorID !== agentID) {
+                    console.warn(`%c[System] [MDS] Order call ${id} failed: agent ${agentID} cannot order agent ${payload.recipientAgentID} because they are not their direct superior.`, "color: red;");
+                    return false;
+                }
+                break;
+            case Standards.systemCallTypes.REPORT.name.toUpperCase():
+                if (!agent.superiorID) {
+                    console.warn(`%c[System] [MDS] Report call ${id} failed: agent ${agentID} has no superior to report to.`, "color: red;");
+                    return false;
+                }
+                break;
+            case Standards.systemCallTypes.APPROVE.name.toUpperCase():
+                // For now, no specific validation.
+                break;
+        }
+
+
         // Check if the agent is allowed to make this call
         const securityPolicy = Standards.systemCallTypes[callType.toUpperCase()].securityPolicy;
-        return true; // TODO: For now, we assume all calls pass inspection. In the future, we can add more checks here.
+        if (securityPolicy === Standards.securityPolicies.CHIEF_ONLY) {
+            if (agent.rank !== Standards.agentRanks.CHIEF) {
+                console.warn(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: agent ${agentID} is not the Chief.`, "color: red;");
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 

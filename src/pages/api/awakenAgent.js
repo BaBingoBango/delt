@@ -25,17 +25,33 @@ export default async function handler(req, res) {
 
     try {
         // Ensure required parameters are provided
-        const {systemPrompt, chatHistory} = req.body;
-        if (!systemPrompt || !chatHistory) {
+        const {systemPrompt, chatHistory, messageLog} = req.body;
+        if (!systemPrompt || !chatHistory) { // messageLog is optional for backward compatibility but recommended
             return res.status(400).json({ error: "Error: Requires parameters systemPrompt and chatHistory" });
         }
         console.log("%c[System] [awakenAgent.js] Required parameters are present.", "background-color: #CBC3E3;");
 
+        // Use the full messageLog if available, otherwise fall back to the agent's personal history.
+        const historySource = messageLog ? messageLog : chatHistory;
+
         // Clean the chat history to only include role and content, and map 'assistant' to 'model'.
-        const messages = chatHistory.map(message => ({
-            role: message.role === 'assistant' ? 'model' : message.role,
-            content: [{text: message.content}],
-        }));
+        const messages = historySource.map(message => {
+            // If the message is a string, it's from the new messageLog format
+            if (typeof message === 'string') {
+                // A simple heuristic to determine role. System messages are from the "user" perspective for the AI.
+                // Agent's own previous responses are from the "model" perspective.
+                const role = message.includes("SYSTEM MESSAGE") ? 'user' : 'model';
+                return {
+                    role: role,
+                    content: [{text: message}],
+                }
+            }
+            // Fallback for old chatHistory format
+            return {
+                role: message.role === 'assistant' ? 'model' : message.role,
+                content: [{text: message.content}],
+            }
+        });
 
         // Generate!
         console.log("%c[System] [awakenAgent.js] Generating...", "background-color: #CBC3E3;");
