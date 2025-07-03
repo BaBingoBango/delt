@@ -19,6 +19,24 @@ class Directory {
         this.updateCallback = callback;
     }
 
+    setAgentStatus(agentId, status) {
+        if (this.agents.has(agentId)) {
+            const agent = this.agents.get(agentId);
+            agent.status = status;
+
+            // If an agent is generating, set all its superiors to "Awaiting Report"
+            if (status === 'Generating...') {
+                let superiorId = agent.superiorID;
+                while (superiorId && this.agents.has(superiorId)) {
+                    const superior = this.agents.get(superiorId);
+                    superior.status = 'Awaiting Report';
+                    superiorId = superior.superiorID;
+                }
+            }
+            this.triggerUpdate();
+        }
+    }
+
     triggerUpdate() {
         if (this.updateCallback) {
             this.updateCallback(Array.from(this.agents.values()));
@@ -52,6 +70,7 @@ class Directory {
         const agent = {
             identifier,
             chatHistory: [],
+            messageLog: [],
             callSign,
             title,
             rank,
@@ -59,7 +78,9 @@ class Directory {
             superiorID,
             subordinateIDs: subordinateIDs || [],
             pendingOrders: [],
-            status: 'Idle'
+            pendingReports: new Map(),
+            status: 'Idle',
+            unresolvedCalls: [],
         };
 
         // Add this agent to its superior's list of subordinates
@@ -73,24 +94,49 @@ class Directory {
         this.triggerUpdate();
         return identifier;
     }
+
+    debugAgent(agentId) {
+        if (!this.agents.has(agentId)) {
+            console.error(`%c[Debug] Agent with ID ${agentId} not found.`, 'color: red; font-weight: bold;');
+            return;
+        }
+
+        const agent = this.agents.get(agentId);
+
+        console.group(`%c[Debug] Agent Details: ${agent.callSign} (${agentId})`, 'color: #1E90FF; font-weight: bold; font-size: 1.2em;');
+
+        console.log('%cBasic Info', 'color: #1E90FF; font-weight: bold;');
+        console.log(`  %cTitle:%c ${agent.title}`, 'font-weight: bold;', 'font-weight: normal;');
+        console.log(`  %cRank:%c ${agent.rank.name}`, 'font-weight: bold;', 'font-weight: normal;');
+        console.log(`  %cTeam:%c ${agent.team.name}`, 'font-weight: bold;', 'font-weight: normal;');
+        console.log(`  %cStatus:%c ${agent.status}`, 'font-weight: bold;', 'font-weight: normal;');
+
+        console.log('%cHierarchy', 'color: #1E90FF; font-weight: bold;');
+        console.log(`  %cSuperior ID:%c ${agent.superiorID || 'None'}`, 'font-weight: bold;', 'font-weight: normal;');
+        console.log(`  %cSubordinate IDs:%c ${agent.subordinateIDs.length > 0 ? agent.subordinateIDs.join(', ') : 'None'}`, 'font-weight: bold;', 'font-weight: normal;');
+
+        console.log('%cComms', 'color: #1E90FF; font-weight: bold;');
+        console.log(`  %cPending Orders:%c ${agent.pendingOrders.length}`, 'font-weight: bold;', 'font-weight: normal;');
+        console.dir(agent.pendingOrders);
+        console.log(`  %cPending Reports:%c ${agent.pendingReports.size}`, 'font-weight: bold;', 'font-weight: normal;');
+        console.dir(agent.pendingReports);
+
+        console.log('%cLogs', 'color: #1E90FF; font-weight: bold;');
+        console.groupCollapsed('  Chat History');
+        console.log(agent.chatHistory);
+        console.groupEnd();
+        console.groupCollapsed('  Message Log');
+        console.log(agent.messageLog);
+        console.groupEnd();
+
+        console.groupEnd();
+    }
 }
 
 class Scanning {
     static async scanAgentResponse(directory, responseText, agentID) {
-        console.log(`%c[System] [MDS] Scanning agent response from ID ${agentID}...`, "background-color: #CBC3E3;");
+        console.log(`%c[System] [MDS] Scanning agent response from ID ${agentID}... Response text:`, "background-color: #CBC3E3;");
         console.log(responseText);
-
-        // First, save this response to the agent's chat history
-        if (!directory.agents.has(agentID)) {
-            console.error(`%c[System] [MDS] Agent with ID ${agentID} does not exist. Cannot scan response.`, "color: red;");
-            return [];
-        }
-        const agent = directory.agents.get(agentID);
-        agent.chatHistory.push({
-            role: "assistant",
-            content: responseText,
-        });
-        console.log(`%c[System] [MDS] Response saved to agent ${agentID}'s chat history.`, "color: green;");
 
         const callRegex = /###(.+?)###\s*([\s\S]*?)\s*###\1###/g;
         const matches = [...responseText.matchAll(callRegex)];

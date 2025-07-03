@@ -6,7 +6,6 @@
 //
 
 import {standardInitialMessage} from "../lib/SIM";
-import {chiefSystemPrompt} from "../lib/systemPrompts";
 import {Scanning} from "@/MDS";
 import {Templates} from "@/DSP";
 import React from 'react';
@@ -14,6 +13,7 @@ import ReactDOM from 'react-dom/client';
 import ClarificationForm from "@/ClarificationForm";
 import RecruitmentForm from "@/RecruitmentForm";
 import PhaseShiftForm from "@/PhaseShiftForm";
+import {Awakening} from "@/Awakening";
 
 class Standards {
     static agentRanks = {
@@ -259,39 +259,11 @@ ${JSON.stringify(argumentsObject, null, 2)}
             },
         );
 
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
         // Send the message!
         console.log("%c[System] [SCD] Sending SIM message to Chief-rank agent...", "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        console.log(json.response, recipientID);
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        directory.debugAgent(recipientID);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
     static async sendBlankResponseWarningMessage(directory, recipientID) {
@@ -334,6 +306,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
+                messageLog: directory.messageLog,
             })
         });
         if (!res.ok) {
@@ -388,6 +361,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
+                messageLog: directory.messageLog,
             })
         });
         if (!res.ok) {
@@ -432,7 +406,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
         const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
 
         // Send the message!
-        console.log(`%c[System] [SCD] Sending order from ${senderID} to agent ${recipientID}...`, "background-color: #CBC3E3;");
+        console.log("%c[System] [SCD] Sending order from ${senderID} to agent ${recipientID}...", "background-color: #CBC3E3;");
         directory.setAgentStatus(recipientID, "Generating...");
         const res = await fetch("/api/awakenAgent", {
             method: "POST",
@@ -443,6 +417,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
+                messageLog: directory.messageLog,
             })
         });
         if (!res.ok) {
@@ -498,6 +473,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
+                messageLog: directory.messageLog,
             })
         });
         if (!res.ok) {
@@ -553,6 +529,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
+                messageLog: directory.messageLog,
             })
         });
         if (!res.ok) {
@@ -606,6 +583,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 systemPrompt: systemPrompt,
                 chatPrompt: messageString,
                 chatHistory: recipient.chatHistory,
+                messageLog: directory.messageLog,
             })
         });
         if (!res.ok) {
@@ -626,90 +604,69 @@ ${JSON.stringify(argumentsObject, null, 2)}
             throw new Error(`Cannot execute system calls for agent with ID ${agentID}. (does not exist)`);
         }
 
-        const interactiveCalls = [];
-        const backgroundCalls = [];
+        const agent = directory.agents.get(agentID);
+        agent.status = "Processing Calls...";
+        directory.triggerUpdate();
 
-        // Separate calls into interactive and background tasks
+        const results = [];
+
         for (const call of parsedCalls) {
             if (!call.hasClearedInspection) {
                 console.warn(`Cannot execute system call ID ${call.id}. (has not cleared inspection)`);
+                results.push({ callID: call.id, status: "REJECTED", details: "Failed inspection." });
                 continue;
             }
 
-            // IDEMPOTENCY CHECK: Skip if this call has already been processed.
             if (directory.processedCallIDs.has(call.id)) {
                 console.warn(`%c[System] [SCD] Skipping already processed call ID: ${call.id}`, "color: orange;");
+                results.push({ callID: call.id, status: "SKIPPED", details: "Already processed." });
                 continue;
             }
 
-            switch (call.type.toUpperCase()) {
-                case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
-                case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
-                case Standards.systemCallTypes.PHASE.name.toUpperCase():
-                    interactiveCalls.push(call);
-                    break;
-                case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                case Standards.systemCallTypes.REPORT.name.toUpperCase():
-                case Standards.systemCallTypes.APPROVE.name.toUpperCase():
-                    backgroundCalls.push(call);
-                    break;
-                default:
-                    backgroundCalls.push(call);
-                    break;
-            }
-        }
-
-        // Execute background calls (can be done in parallel if they are independent)
-        for (const call of backgroundCalls) {
-            console.log(`%c[System] [SCD] Executing background call: ${call.type}`, "background-color: #CBC3E3;");
             try {
+                let result;
+                console.log(`%c[System] [SCD] Executing call: ${call.type} (${call.id})`, "background-color: #CBC3E3;");
                 switch (call.type.toUpperCase()) {
                     case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                        await Operations.executeOrderCall(directory, call, agentID);
+                        result = await Operations.executeOrderCall(directory, call, agentID);
                         break;
                     case Standards.systemCallTypes.REPORT.name.toUpperCase():
-                        await Operations.executeReportCall(directory, call, agentID);
+                        result = await Operations.executeReportCall(directory, call, agentID);
                         break;
                     case Standards.systemCallTypes.APPROVE.name.toUpperCase():
-                        await Operations.executeApproveCall(directory, call, agentID);
+                        result = await Operations.executeApproveCall(directory, call, agentID);
+                        break;
+                    case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
+                        result = await Operations.executeClarifyCall(directory, call, agentID);
+                        break;
+                    case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
+                        result = await Operations.executeRecruitCall(directory, call, agentID);
+                        break;
+                    case Standards.systemCallTypes.PHASE.name.toUpperCase():
+                        result = await Operations.executePhaseCall(directory, call, agentID);
+                        break;
+                    default:
+                        result = { callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` };
                         break;
                 }
-                directory.processedCallIDs.add(call.id); // Mark as processed after successful execution
+                results.push(result);
+                directory.processedCallIDs.add(call.id);
             } catch (error) {
-                console.error(`%c[System] [SCD] Failed to execute background call ${call.id} of type ${call.type}. Error: ${error.message}`, "color: red;");
-                // TODO: Send a system message back to the original calling agent with the failure.
+                console.error(`%c[System] [SCD] Failed to execute call ${call.id} of type ${call.type}. Error: ${error.message}`, "color: red;");
+                results.push({
+                    callID: call.id,
+                    status: "FAILED",
+                    error: error.message
+                });
             }
         }
 
-        // Execute background calls concurrently
-        const backgroundPromises = backgroundCalls.map(call => {
-            console.log(`%c[System] [SCD] Queuing background call: ${call.type}`, "background-color: #CBC3E3;");
-            switch (call.type.toUpperCase()) {
-                case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                    return Operations.executeOrderCall(directory, call, agentID);
-                case Standards.systemCallTypes.REPORT.name.toUpperCase():
-                    return Operations.executeReportCall(directory, call, agentID);
-                case Standards.systemCallTypes.APPROVE.name.toUpperCase():
-                    return Operations.executeApproveCall(directory, call, agentID);
-                default:
-                    return Promise.resolve(); // Or handle other background calls
-            }
-        });
-
-        try {
-            await Promise.all(backgroundPromises);
-            console.log(`%c[System] [SCD] All background calls processed.`, "background-color: #90EE90;");
-        } catch (error) {
-            console.error(`%c[System] [SCD] An error occurred during concurrent background call execution: ${error.message}`, "color: red;");
-            // TODO: Send a system message back to the original calling agent with the failure details.
-        }
-
-        // Execute interactive calls sequentially and collect results
-        if (interactiveCalls.length > 0) {
-            const results = await Operations.executeInteractiveCalls(directory, interactiveCalls, agentID);
-            if (results.length > 0) {
-                await Operations.sendCallResultsMessage(directory, agentID, results);
-            }
+        console.log(`%c[System] [SCD] All calls for agent ${agentID} processed. Sending aggregated results.`, "background-color: #90EE90;");
+        if (results.length > 0) {
+            await Operations.sendCallResultsMessage(directory, agentID, results);
+        } else {
+            // If there were no calls to process (e.g., all were skipped), set agent back to Idle.
+            directory.setAgentStatus(agentID, "Idle");
         }
     }
 
@@ -748,24 +705,44 @@ ${JSON.stringify(argumentsObject, null, 2)}
         return results;
     }
 
-    static executeOrderCall(directory, parsedCall, agentID) {
+    static async executeOrderCall(directory, parsedCall, agentID) {
         console.log(`%c[System] [SCD] Executing Order call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
         const { orderString, recipientAgentID } = parsedCall.payload;
         const agent = directory.agents.get(agentID);
         agent.pendingOrders.push(parsedCall.id);
-        return Operations.sendOrderMessage(directory, recipientAgentID, orderString, parsedCall.id, agentID);
+        await Operations.sendOrderMessage(directory, recipientAgentID, orderString, parsedCall.id, agentID);
+        return {
+            callID: parsedCall.id,
+            status: "SUCCESS",
+            details: `Order sent to agent ${recipientAgentID}.`
+        };
     }
 
-    static executeReportCall(directory, parsedCall, agentID) {
+    static async executeReportCall(directory, parsedCall, agentID) {
         console.log(`%c[System] [SCD] Executing Report call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
         const { reportString, originalOrderID } = parsedCall.payload;
         const reportingAgent = directory.agents.get(agentID);
+
         if (!reportingAgent.superiorID) {
             throw new Error(`Agent ${agentID} has no superior to report to.`);
         }
+
         const superior = directory.agents.get(reportingAgent.superiorID);
+        if (!superior) {
+            throw new Error(`Superior agent with ID ${reportingAgent.superiorID} not found.`);
+        }
+
+        // Forward the report to the superior.
+        await Operations.sendReportingMessage(directory, superior.identifier, reportString, originalOrderID, agentID);
+
+        // Remove the original order ID from the superior's list of pending orders.
         superior.pendingOrders = superior.pendingOrders.filter(id => id !== originalOrderID);
-        return Operations.sendReportingMessage(directory, reportingAgent.superiorID, reportString, originalOrderID, agentID);
+
+        return {
+            callID: parsedCall.id,
+            status: "SUCCESS",
+            details: `Report for order ${originalOrderID} sent to superior ${superior.identifier}.`
+        };
     }
 
     static executeClarifyCall(directory, parsedCall, agentID) {
@@ -899,7 +876,6 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 // This part of logic needs a way to get the original call.
                 // For now, let's assume the original call is passed along, which it is in sendApprovalRequestMessage.
                 // But an APPROVE call doesn't have the full original call. This is a design flaw to be fixed.
-                // For now, we'll just log and move on.
                 console.log(`%c[System] [SCD] Agent ${agentID} approved call ${originalCallID}. Passing up to their superior.`, "background-color: #CBC3E3;");
                 // This would require another sendApprovalRequestMessage, but with the *current* agent as sender.
                 // This is getting complex and suggests a better state management for pending calls.

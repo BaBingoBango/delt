@@ -97,12 +97,7 @@ export default function HomePageView() {
             setAgents([...updatedAgents]);
         });
 
-        directory.setAgentStatus = function(agentId, status) {
-            if (this.agents.has(agentId)) {
-                this.agents.get(agentId).status = status;
-                this.triggerUpdate();
-            }
-        }.bind(directory);
+        directory.setAgentStatus = directory.setAgentStatus.bind(directory);
 
         console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
         const chiefAgentID = directory.recruitNewAgent(
