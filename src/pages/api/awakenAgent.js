@@ -6,14 +6,21 @@
 //
 
 import {genkit} from "genkit";
-import {gemini25ProPreview0325, googleAI} from "@genkit-ai/googleai";
+import {googleAI} from "@genkit-ai/googleai";
+import openAI, {o3} from "genkitx-openai";
 
-// Start by initializing a generic Genkit object
-console.log("%c[System] [awakenAgent.js] Initializing AI model...", "background-color: #CBC3E3;");
-const ai = genkit({
+// Gemini 2.5 Pro
+const gemini = genkit({
     plugins: [googleAI()],
-    model: gemini25ProPreview0325,
+    model: googleAI.model('gemini-2.5-pro'),
 });
+
+// ChatGPT o3
+const chatgpt = genkit({
+    plugins: [openAI({ apiKey: process.env.OPENAI_API_KEY })],
+    model: o3,
+});
+console.log("%c[System] [awakenAgent.js] AI models initialized!", "background-color: #CBC3E3;");
 
 export default async function handler(req, res) {
     // Ensure the request method is POST
@@ -25,26 +32,56 @@ export default async function handler(req, res) {
 
     try {
         // Ensure required parameters are provided
-        const {systemPrompt, chatHistory, newUserPrompt} = req.body;
-        if (!systemPrompt || !chatHistory || !newUserPrompt) {
-            return res.status(400).json({ error: "Error: Requires parameters systemPrompt, chatHistory, and newUserPrompt." });
+        const {systemPrompt, chatHistory, newUserPrompt, team} = req.body;
+        if (!systemPrompt || !chatHistory || !newUserPrompt || !team) {
+            return res.status(400).json({
+                error: "Error: Requires parameters systemPrompt, chatHistory, newUserPrompt, and team."
+            });
         }
         console.log("%c[System] [awakenAgent.js] Required parameters are present.", "background-color: #CBC3E3;");
 
         // Print the received parameters for debugging
         console.log("%c[System] [awakenAgent.js] Received parameters:", "background-color: #CBC3E3;");
-        console.log("System Prompt:", systemPrompt);
+        // console.log("System Prompt:", systemPrompt);
         console.log("Chat History:", chatHistory);
         console.log("New User Prompt:", newUserPrompt);
+        console.log("Team:", team);
 
-        // Generate the response
+        // Generate the response!
         console.log("%c[System] [awakenAgent.js] Generating...", "background-color: #CBC3E3;");
-        const APIresponse = await ai.generate({
-            system: systemPrompt,
-            prompt: newUserPrompt,
-            messages: chatHistory,
-        });
-        const agentResponse = APIresponse.text;
+        let agentResponse = "";
+
+        // Switch based off of team
+        if (team.name === "Diamonds") {
+            const genkitResponse = await gemini.generate({
+                system: systemPrompt,
+                prompt: newUserPrompt,
+                messages: chatHistory,
+            });
+            agentResponse = genkitResponse.text;
+        } else if (team.name === "Hearts") {
+            const genkitResponse = await gemini.generate({
+                system: systemPrompt,
+                prompt: newUserPrompt,
+                messages: chatHistory,
+            });
+            agentResponse = genkitResponse.text;
+        } else if (team.name === "Spades") {
+            const genkitResponse = await chatgpt.generate({
+                system: systemPrompt,
+                prompt: newUserPrompt,
+                messages: chatHistory,
+            });
+            agentResponse = genkitResponse.text;
+        } else {
+            // Clubs
+            const genkitResponse = await chatgpt.generate({
+                system: systemPrompt,
+                prompt: newUserPrompt,
+                messages: chatHistory,
+            });
+            agentResponse = genkitResponse.text;
+        }
 
         // Return!
         res.status(200).json({response: agentResponse});

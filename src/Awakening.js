@@ -13,9 +13,15 @@ class Awakening {
 
         // Start by constructing the full system prompt
         const fullSystemPrompt = await Templates.getSystemPrompt(agent.rank, agent.team);
+        console.log(`%c[System] [Awakening.js] About to awaken agent ${agent.id}. Debug readout:`, "background-color: #CBC3E3;");
+        directory.debugAgent(agent.id);
+        console.log(`%c[System] [Awakening.js] Sending prompt:`, "background-color: #CBC3E3;", newUserPrompt);
 
-        // Call the API file to get a response
-        directory.setAgentStatus(agent.id, "Generating...");
+        // Update the agent's status
+        agent.status = "Generating...";
+        directory.triggerUpdate();
+
+        // Call the API file to get a response!
         const res = await fetch("/api/awakenAgent", {
             method: "POST",
             headers: {
@@ -25,10 +31,12 @@ class Awakening {
                 systemPrompt: fullSystemPrompt,
                 newUserPrompt: newUserPrompt,
                 chatHistory: agent.chatHistory,
+                team: agent.team,
             })
         });
         if (!res.ok) {
-            directory.setAgentStatus(agent.id, "Idle");
+            agent.status = "Idle";
+            directory.triggerUpdate();
             throw new Error("Failed to send system message. (API request failed)");
         }
 
@@ -36,16 +44,17 @@ class Awakening {
         const json = await res.json();
         const agentResponse = json.response;
         console.log(agentResponse, agent.id);
-        directory.setAgentStatus(agent.id, "Idle");
+        agent.status = "Idle";
+        directory.triggerUpdate();
 
         // Update the agent's chat history with the two new messages it has just experienced
         agent.chatHistory.push({
             role: "user",
-            content: newUserPrompt,
+            content: [{ text: newUserPrompt }],
         });
         agent.chatHistory.push({
             role: "model",
-            content: agentResponse,
+            content: [{ text: agentResponse }],
         });
 
         // Return the response

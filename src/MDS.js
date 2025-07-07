@@ -6,6 +6,9 @@
 //
 
 import {Operations, Standards} from "@/SCD";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import ClarificationForm from "@/ClarificationForm";
 
 class Directory {
     constructor() {
@@ -68,7 +71,8 @@ class Directory {
 
         // Create an agent object
         const agent = {
-            identifier,
+            identifier: identifier,
+            id: identifier,
             chatHistory: [],
             messageLog: [],
             callSign,
@@ -136,25 +140,32 @@ class Directory {
 class Scanning {
     static async scanAgentResponse(directory, responseText, agentID) {
         console.log(`%c[System] [MDS] Scanning agent response from ID ${agentID}... Response text:`, "background-color: #CBC3E3;");
-        console.log(responseText);
 
         const callRegex = /###(.+?)###\s*([\s\S]*?)\s*###\1###/g;
         const matches = [...responseText.matchAll(callRegex)];
 
         if (matches.length === 0) {
             const agent = directory.agents.get(agentID);
-            if (agent && agent.pendingOrders && agent.pendingOrders.length > 0) {
-                console.log(`%c[System] [MDS] Scan complete. No system calls found, but agent has pending orders. Allowing blank response.`, "color: gray;");
+            if (agent && agent.unresolvedCalls.length > 0) {
+                console.log(`%c[System] [MDS] Scan complete. No system calls found, but agent has unresolved calls. Allowing blank response.`, "color: gray;");
                 return [];
             }
             console.log("%c[System] [MDS] Scan complete. No system calls were found.", "color: gray;");
-            console.log(responseText);
             Operations.sendSystemMessage(directory, agentID, Standards.systemMessageTypes.BLANK_RESPONSE_WARNING)
             return [];
+        } else {
+            // Ensure the agent has no unresolved calls before proceeding
+            const agent = directory.agents.get(agentID);
+            if (agent && agent.unresolvedCalls.length > 0) {
+                console.warn(`%c[System] [MDS] Agent ${agentID} has unresolved calls. Rejecting new response with system calls.`, "color: red;");
+                Operations.sendSystemMessage(directory, agentID, Standards.systemMessageTypes.RUNAWAY_CALL_WARNING);
+                return;
+            }
         }
 
         let hasMalformedCall = false;
         const parsedCalls = [];
+        let reasoningText = "";
 
         console.log(`%c[System] [MDS] Found ${matches.length} potential system calls in the response. Beginning validation pass...`, "color: blue;");
         for (const match of matches) {
@@ -166,7 +177,9 @@ class Scanning {
                 // (1) Parse & confirm type
                 const typeMatch = callContent.match(/Type:\s*(\w+)/);
                 if (!typeMatch) {
-                    console.error(`%c[System] [MDS] Malformed Call ID ${uniqueID}: Missing 'Type' field.`, "color: red;");
+                    const errorMessage = `Malformed Call ID ${uniqueID}: Missing 'Type' field.`;
+                    console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
+                    reasoningText = errorMessage;
                     hasMalformedCall = true;
                     break;
                 }
@@ -175,7 +188,9 @@ class Scanning {
                 // (2) Parse JSON payload
                 const jsonMatch = callContent.match(/({[\s\S]*})/);
                 if (!jsonMatch) {
-                    console.error(`%c[System] [MDS] Malformed Call ID ${uniqueID}: Missing JSON payload.`, "color: red;");
+                    const errorMessage = `Malformed Call ID ${uniqueID}: Missing JSON payload.`;
+                    console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
+                    reasoningText = errorMessage;
                     hasMalformedCall = true;
                     break;
                 }
@@ -184,13 +199,17 @@ class Scanning {
 
                 // (3) Send the structured call to inspection
                 if (!payload || typeof payload !== 'object') {
-                    console.error(`%c[System] [MDS] Malformed Call ID ${uniqueID}: Invalid JSON structure.`, "color: red;");
+                    const errorMessage = `Malformed Call ID ${uniqueID}: Invalid JSON structure.`;
+                    console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
+                    reasoningText = errorMessage;
                     hasMalformedCall = true;
                     break;
                 }
                 const inspectionResult = CallSubmissionAndValidation.inspectSystemCall(directory, uniqueID, callType, payload, agentID);
                 if (!inspectionResult) {
-                    console.error(`%c[System] [MDS] Call ID ${uniqueID} failed inspection.`, "color: red;");
+                    const errorMessage = `Call ID ${uniqueID} failed inspection.`;
+                    console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
+                    reasoningText = errorMessage;
                     hasMalformedCall = true;
                     break;
                 }
@@ -206,7 +225,9 @@ class Scanning {
                 console.log(`%c[System] [MDS] Successfully parsed and validated call ID ${uniqueID}`, "color: green;");
 
             } catch (error) {
-                console.error(`%c[System] [MDS] Malformed Call ID ${uniqueID}: Invalid JSON. Error: ${error.message}`, "color: red;");
+                const errorMessage = `Malformed Call ID ${uniqueID}: Invalid JSON. Error: ${error.message}`;
+                console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
+                reasoningText = errorMessage;
                 hasMalformedCall = true;
                 break;
             }
@@ -214,7 +235,7 @@ class Scanning {
 
         if (hasMalformedCall) {
             console.log("%c[System] [MDS] Scan failed. Malformed call detected. Rejecting entire submission and notifying agent.", "background-color: #FFBABA; color: #D8000C;");
-            Operations.sendMalformedCallWarningMessage(directory, agentID, responseText);
+            Operations.sendSystemMessage(directory, agentID, Standards.systemMessageTypes.MALFORMED_CALL_WARNING, reasoningText);
             return;
         }
 
@@ -235,7 +256,7 @@ class CallSubmissionAndValidation {
     // - Be allowed (e.g. "properly filled out", for instance an agent cannot Order a superior or Recruit themselves).
     //
     // This function does assume that the call has already been parsed and is well-formed.
-    static inspectSystemCall(directory, id, type, payload, agentID) {
+    static async inspectSystemCall(directory, id, type, payload, agentID) {
 
         // Check that the type exists
         const callType = type;
@@ -263,41 +284,149 @@ class CallSubmissionAndValidation {
             return false;
         }
 
-        // Specific call validation
-        switch (type.toUpperCase()) {
-            case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                const recipientAgent = directory.agents.get(payload.recipientAgentID);
-                if (!recipientAgent) {
-                    console.warn(`%c[System] [MDS] Order call ${id} failed: recipient agent ${payload.recipientAgentID} does not exist.`, "color: red;");
-                    return false;
-                }
-                if (recipientAgent.superiorID !== agentID) {
-                    console.warn(`%c[System] [MDS] Order call ${id} failed: agent ${agentID} cannot order agent ${payload.recipientAgentID} because they are not their direct superior.`, "color: red;");
-                    return false;
-                }
-                break;
-            case Standards.systemCallTypes.REPORT.name.toUpperCase():
-                if (!agent.superiorID) {
-                    console.warn(`%c[System] [MDS] Report call ${id} failed: agent ${agentID} has no superior to report to.`, "color: red;");
-                    return false;
-                }
-                break;
-            case Standards.systemCallTypes.APPROVE.name.toUpperCase():
-                // For now, no specific validation.
-                break;
-        }
-
-
-        // Check if the agent is allowed to make this call
+        // Next, check if the agent is authorized to make this call
         const securityPolicy = Standards.systemCallTypes[callType.toUpperCase()].securityPolicy;
+
         if (securityPolicy === Standards.securityPolicies.CHIEF_ONLY) {
+            // Chief Only: Only the Chief can make this call
             if (agent.rank !== Standards.agentRanks.CHIEF) {
                 console.warn(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: agent ${agentID} is not the Chief.`, "color: red;");
                 return false;
             }
+
+        } else if (securityPolicy === Standards.securityPolicies.NONE) {
+            // No specific security policy: Any agent can make this call
+            // (No action needed, just continue)
+
+        } else if (securityPolicy === Standards.securityPolicies.ALL_SUPERIORS) {
+            // All Superiors: Requires approval from every superior, up to the Chief.
+            let currentApprovingAgentID = agent.superiorID;
+
+            // If the agent has no superior, it's the Chief, so no approvals are needed.
+            if (!currentApprovingAgentID) {
+                console.log(`%c[System] [MDS] Call ${id} of type ${type} made by Chief, no superior approval needed.`, "color: green;");
+            }
+
+            while (currentApprovingAgentID) {
+                // Confirm the superior agent exists
+                if (!directory.agents.has(currentApprovingAgentID)) {
+                    console.warn(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: agent ${agentID} has a non-existent superior ${currentApprovingAgentID}.`, "color: red;");
+                    return false;
+                }
+                const approver = directory.agents.get(currentApprovingAgentID);
+
+                // Ask this agent for approval
+                const messageContentString = `Agent ${agent.callSign} (${agentID}) is requesting approval for call ID ${id} of type ${type}. Payload: ${JSON.stringify(payload)}`;
+                const approvalResponse = await Operations.sendSystemMessage(directory, currentApprovingAgentID, Standards.systemMessageTypes.APPROVAL_REQUEST, messageContentString);
+                if (!approvalResponse || !approvalResponse.includes('$$$APPROVED$$$')) {
+                    console.warn(`%c[System] [MDS] Call ${id} denied by agent ${approver.callSign} (${currentApprovingAgentID}).`, "color: red;");
+                    return false;
+                }
+                console.log(`%c[System] [MDS] Call ${id} approved by agent ${approver.callSign} (${currentApprovingAgentID}).`, "color: green;");
+
+                // Move to the next superior
+                currentApprovingAgentID = approver.superiorID;
+            }
+            // If loop finishes, all superiors have approved.
+            console.log(`%c[System] [MDS] Call ${id} of type ${type} has been approved by all required superiors.`, "color: green;");
+
+        } else if (securityPolicy === Standards.securityPolicies.COMPLETE_CHAIN) {
+            // Complete Chain: Requires approval from every superior, including the Chief and the user
+            let currentApprovingAgentID = agent.superiorID;
+
+            while (true) {
+                // This is the Chief agent, so present the request to the user
+                if (!agent.superiorID) {
+                    console.warn(`%c[System] [MDS] Call ${id} of type ${type} requires approval from the user.`, "color: red;");
+                    try {
+                        const userApproved = await CallSubmissionAndValidation.requestUserApproval(agent, type, payload);
+                        if (!userApproved) {
+                            console.warn(`%c[System] [MDS] Call ${id} of type ${type} denied by the user.`, "color: red;");
+                            return false;
+                        }
+                        console.log(`%c[System] [MDS] Call ${id} of type ${type} approved by the user.`, "color: green;");
+                        break; // End of the approval chain
+                    } catch (error) {
+                        console.error(`%c[System] [MDS] User approval failed for call ${id}. Error: ${error.message}`, "color: red;");
+                        return false;
+                    }
+                }
+
+                // Confirm the superior agent exists
+                if (!currentApprovingAgentID || !directory.agents.has(currentApprovingAgentID)) {
+                    console.warn(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: agent ${agentID} has no superior to approve this call.`, "color: red;");
+                    return false;
+                }
+
+                // Ask this agent for approval
+                const messageContentString = `Agent ${agent.callSign} (${agentID}) is requesting approval for call ID ${id} of type ${type}. Payload: ${JSON.stringify(payload)}`;
+                const approvalResponse = await Operations.sendSystemMessage(directory, currentApprovingAgentID, Standards.systemMessageTypes.APPROVAL_REQUEST, messageContentString);
+                if (!approvalResponse || !approvalResponse.includes('$$$APPROVED$$$')) {
+                    console.warn(`%c[System] [MDS] Call ${id} denied by agent ${approver.callSign} (${currentApproverId}).`, "color: red;");
+                    return false;
+                }
+                console.log(`%c[System] [MDS] Call ${id} approved by agent ${approver.callSign} (${currentApproverId}).`, "color: green;");
+
+                // Move to the next superior
+                const approver = directory.agents.get(currentApprovingAgentID);
+                if (approver.superiorID) {
+                    currentApprovingAgentID = approver.superiorID;
+                } else {
+                    // No more superiors, so the call is approved
+                    console.log(`%c[System] [MDS] Call ${id} of type ${type} has been approved by all required superiors.`, "color: green;");
+                    break;
+                }
+            }
+        }
+
+        // Specific call validation
+        switch (type.toUpperCase()) {
+            case Standards.systemCallTypes.ORDER.name.toUpperCase():
+                // Make sure the agent being ordered is a subordinate of the agent making the call, and that it exists
+                if (!payload.recipientAgentID || !directory.agents.has(payload.recipientAgentID)) {
+                    console.warn(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: recipient agent ID ${payload.recipientAgentID} does not exist.`, "color: red;");
+                    return false;
+                }
         }
 
         return true;
+    }
+
+    static requestUserApproval(agent, callType, payload) {
+        return new Promise((resolve, reject) => {
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const root = ReactDOM.createRoot(container);
+
+            const cleanup = () => {
+                root.unmount();
+                if (document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+            };
+
+            const handleConfirm = () => {
+                cleanup();
+                resolve(true);
+            };
+
+            const handleCancel = () => {
+                cleanup();
+                resolve(false); // Resolve with false instead of rejecting
+            };
+
+            const question = `Agent ${agent.callSign} requests approval for a '${callType}' call. Do you approve?`;
+            const options = ["Approve"]; // Using ClarificationForm, so need options
+
+            const formElement = React.createElement(ClarificationForm, {
+                questions: [question],
+                options: [options],
+                onConfirm: handleConfirm,
+                onCancel: handleCancel,
+            });
+
+            root.render(formElement);
+        });
     }
 }
 

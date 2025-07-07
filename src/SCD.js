@@ -14,6 +14,9 @@ import ClarificationForm from "@/ClarificationForm";
 import RecruitmentForm from "@/RecruitmentForm";
 import PhaseShiftForm from "@/PhaseShiftForm";
 import {Awakening} from "@/Awakening";
+import {blankResponseWarningMessage} from "../lib/Blank Response Warning";
+import {runawayCallWarningMessage} from "../lib/Runaway Call Warning";
+import {malformedCallWarningMessage} from "../lib/Malformed Call Warning";
 
 class Standards {
     static agentRanks = {
@@ -85,6 +88,9 @@ class Standards {
         },
         MALFORMED_CALL_WARNING: {
             name: "Malformed Call Warning",
+        },
+        RUNAWAY_CALL_WARNING: {
+            name: "Runaway Call Warning",
         }
     }
 
@@ -143,12 +149,6 @@ class Standards {
             description: "Request to move from the Planning to Execution phase.",
             parameters: ["justification", "depString"],
             securityPolicy: Standards.securityPolicies.CHIEF_ONLY
-        },
-        APPROVE: {
-            name: "Approve",
-            description: "Approve a request from a subordinate agent.",
-            parameters: ["originalCallID", "justification"],
-            securityPolicy: Standards.securityPolicies.NONE
         }
     }
 }
@@ -211,7 +211,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
     };
 
     // Generic function to send a system message to an agent; switches to specific functions.
-    static sendSystemMessage(directory, recipientID, type) {
+    static sendSystemMessage(directory, recipientID, type, messageContent = "") {
         if (!directory.agents.has(recipientID)) {
             throw new Error(`Message cannot be sent to agent with ID ${recipientID}. (does not exist)`);
         }
@@ -222,17 +222,18 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 Operations.sendStandardInitialMessage(directory, recipientID).then(() => {}); break;
             case Standards.systemMessageTypes.BLANK_RESPONSE_WARNING:
                 Operations.sendBlankResponseWarningMessage(directory, recipientID).then(() => {}); break;
-            case Standards.systemMessageTypes.ORDERS:
-                // This is handled by executeOrderCall, not directly.
+            case Standards.systemMessageTypes.RUNAWAY_CALL_WARNING:
+                Operations.sendRunawayCallWarningMessage(directory, recipientID).then(() => {}); break;
+            case Standards.systemMessageTypes.CALL_RESULTS:
+                Operations.sendCallResultsMessage(directory, recipientID, messageContent).then(() => {}); break;
                 break;
             case Standards.systemMessageTypes.REPORTING:
                 // This is handled by executeReportCall, not directly.
                 break;
             case Standards.systemMessageTypes.APPROVAL_REQUEST:
-                // This is handled by executeClarifyCall, not directly.
-                break;
+                return Operations.sendApprovalRequestMessage(directory, recipientID, messageContent).then(() => {}); break;
             case Standards.systemMessageTypes.MALFORMED_CALL_WARNING:
-                // This is handled by the Scanning department, not directly.
+                Operations.sendMalformedCallWarningMessage(directory, recipientID, messageContent).then(() => {});
                 break;
             default:
                 throw new Error(`Cannot deliver system message of type: ${type}. (type does not exist)`);
@@ -252,8 +253,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
             directory,
             recipientID,
             Standards.systemMessageTypes.SIM,
-            "SIM",
-            "Standard Initial Message System (SIMS)",
+            "STANDARD INITIAL MESSAGE",
+            "User Jump Squad",
             {
                 text: standardInitialMessage
             },
@@ -262,8 +263,32 @@ ${JSON.stringify(argumentsObject, null, 2)}
         // Send the message!
         console.log("%c[System] [SCD] Sending SIM message to Chief-rank agent...", "background-color: #CBC3E3;");
         const response = await Awakening.awakenAgent(directory, recipient, messageString);
-        directory.debugAgent(recipientID);
         await Scanning.scanAgentResponse(directory, response, recipientID);
+    }
+
+    static async sendApprovalRequestMessage(directory, recipientID, messageContent) {
+        // Ensure the recipient exists
+        if (!directory.agents.has(recipientID)) {
+            throw new Error(`Cannot send blank response warning to agent with ID ${recipientID}. (does not exist)`);
+        }
+        const recipient = directory.agents.get(recipientID);
+
+        // Construct a system message string
+        const messageString = Operations.produceSystemMessageString(
+            directory,
+            recipientID,
+            Standards.systemMessageTypes.APPROVAL_REQUEST,
+            "APPROVAL_REQUEST",
+            "Inspection Department, Message Dispatch Service",
+            {
+                text: messageContent,
+            },
+        );
+
+        // Send the message!
+        console.log("%c[System] [SCD] Sending malformed call warning message...", "background-color: #CBC3E3;");
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        return response;
     }
 
     static async sendBlankResponseWarningMessage(directory, recipientID) {
@@ -281,49 +306,45 @@ ${JSON.stringify(argumentsObject, null, 2)}
             "BLANK_RESPONSE_WARNING",
             "Scanning Department, Message Dispatch Service",
             {
-                text: "WARNING. You did not provide any system calls which means your response was heard by no one and no external effects occurred. Please ensure you are using the correct syntax for system calls.",
+                text: blankResponseWarningMessage,
             },
         );
 
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
         // Send the message!
         console.log("%c[System] [SCD] Sending blank response warning message...", "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-                messageLog: directory.messageLog,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
-    static async sendMalformedCallWarningMessage(directory, recipientID, originalResponseText) {
+    static async sendRunawayCallWarningMessage(directory, recipientID) {
         // Ensure the recipient exists
         if (!directory.agents.has(recipientID)) {
-            throw new Error(`Cannot send malformed call warning to agent with ID ${recipientID}. (does not exist)`);
+            throw new Error(`Cannot send blank response warning to agent with ID ${recipientID}. (does not exist)`);
+        }
+        const recipient = directory.agents.get(recipientID);
+
+        // Construct a system message string
+        const messageString = Operations.produceSystemMessageString(
+            directory,
+            recipientID,
+            Standards.systemMessageTypes.RUNAWAY_CALL_WARNING,
+            "RUNAWAY_CALL_WARNING",
+            "Scanning Department, Message Dispatch Service",
+            {
+                text: runawayCallWarningMessage,
+            },
+        );
+
+        // Send the message!
+        console.log("%c[System] [SCD] Sending runaway call warning message...", "background-color: #CBC3E3;");
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
+    }
+
+    static async sendMalformedCallWarningMessage(directory, recipientID, messageContent) {
+        // Ensure the recipient exists
+        if (!directory.agents.has(recipientID)) {
+            throw new Error(`Cannot send blank response warning to agent with ID ${recipientID}. (does not exist)`);
         }
         const recipient = directory.agents.get(recipientID);
 
@@ -335,44 +356,14 @@ ${JSON.stringify(argumentsObject, null, 2)}
             "MALFORMED_CALL_WARNING",
             "Scanning Department, Message Dispatch Service",
             {
-                text: "WARNING. Your last submission contained at least one malformed or invalid system call. The entire package of calls was rejected. Please review your submission, correct the errors, and resubmit. Your original response is included below for your reference.",
-                originalResponse: originalResponseText
+                text: malformedCallWarningMessage + messageContent,
             },
         );
 
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
         // Send the message!
         console.log("%c[System] [SCD] Sending malformed call warning message...", "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-                messageLog: directory.messageLog,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
     static async sendOrderMessage(directory, recipientID, orderString, originalCallID, senderID) {
@@ -487,63 +478,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
         Scanning.scanAgentResponse(directory, json.response, recipientID);
     }
 
-    static async sendApprovalRequestMessage(directory, recipientID, originalCall, senderID) {
-        // Ensure the recipient exists
-        if (!directory.agents.has(recipientID)) {
-            throw new Error(`Cannot send approval request to agent with ID ${recipientID}. (does not exist)`);
-        }
-        const recipient = directory.agents.get(recipientID);
-        const sender = directory.agents.get(senderID);
-
-        // Construct a system message string
-        const messageString = Operations.produceSystemMessageString(
-            directory,
-            recipientID,
-            Standards.systemMessageTypes.APPROVAL_REQUEST,
-            `APPROVAL_REQUEST-${originalCall.id}`,
-            `Agent ${sender.callSign} (${senderID})`,
-            {
-                text: `Agent ${sender.callSign} (${senderID}) is requesting approval for the following system call. Please review and use the APPROVE system call if you concur.`,
-                originalCall: originalCall
-            }
-        );
-
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
-        // Send the message!
-        console.log(`%c[System] [SCD] Sending approval request from ${senderID} to agent ${recipientID}...`, "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-                messageLog: directory.messageLog,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
-    }
-
-    static async sendCallResultsMessage(directory, recipientID, results) {
+    static async sendCallResultsMessage(directory, recipientID, messageContent) {
         // Ensure the recipient exists
         if (!directory.agents.has(recipientID)) {
             throw new Error(`Cannot send call results to agent with ID ${recipientID}. (does not exist)`);
@@ -556,153 +491,74 @@ ${JSON.stringify(argumentsObject, null, 2)}
             recipientID,
             Standards.systemMessageTypes.CALL_RESULTS,
             `CALL_RESULTS-${new Date().toISOString()}`,
-            "scd",
+            "Operations Department, System Call Directorate",
             {
-                results: results
+                result: messageContent
             }
         );
 
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
         // Send the message!
-        console.log(`%c[System] [SCD] Sending aggregated call results to agent ${recipientID}...`, "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-                messageLog: directory.messageLog,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
+        console.log("%c[System] [SCD] Sending call results message...", "background-color: #CBC3E3;");
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
-    // Executes a system call package on behalf of an agent. Presumes calls are well-formed; checks for cleared status.
+    // Executes a system call package on behalf of an agent. Presumes calls are well-formed and inspected.
+    //
+    // Calls are executed asynchronously but results are reported back to the agent in a single message (Call Results).
     static async executeSystemCalls(directory, parsedCalls, agentID) {
         // Ensure the agent exists
         if (!directory.agents.has(agentID)) {
             throw new Error(`Cannot execute system calls for agent with ID ${agentID}. (does not exist)`);
         }
 
+        // Update the agent's file with the submitted calls; agents cannot make new calls while they have pending ones
         const agent = directory.agents.get(agentID);
-        agent.status = "Processing Calls...";
+        agent.status = `${parsedCalls.length} Unresolved Calls`;
+        agent.unresolvedCalls = parsedCalls;
         directory.triggerUpdate();
+        console.log(`%c[System] [SCD] Processing ${parsedCalls.length} system calls for agent ${agentID}. Call object:`, "background-color: #CBC3E3;");
+        console.log(parsedCalls);
 
-        const results = [];
-
-        for (const call of parsedCalls) {
-            if (!call.hasClearedInspection) {
-                console.warn(`Cannot execute system call ID ${call.id}. (has not cleared inspection)`);
-                results.push({ callID: call.id, status: "REJECTED", details: "Failed inspection." });
-                continue;
-            }
-
-            if (directory.processedCallIDs.has(call.id)) {
-                console.warn(`%c[System] [SCD] Skipping already processed call ID: ${call.id}`, "color: orange;");
-                results.push({ callID: call.id, status: "SKIPPED", details: "Already processed." });
-                continue;
-            }
-
+        // Set up the async execution objects
+        const callPromises = parsedCalls.map(async (call) => {
             try {
-                let result;
-                console.log(`%c[System] [SCD] Executing call: ${call.type} (${call.id})`, "background-color: #CBC3E3;");
+                console.log(`%c[System] [SCD] Switching & executing call: ${call.type} (${call.id})`, "background-color: #CBC3E3;");
                 switch (call.type.toUpperCase()) {
                     case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                        result = await Operations.executeOrderCall(directory, call, agentID);
-                        break;
+                        return await Operations.executeOrderCall(directory, call, agentID);
                     case Standards.systemCallTypes.REPORT.name.toUpperCase():
-                        result = await Operations.executeReportCall(directory, call, agentID);
-                        break;
-                    case Standards.systemCallTypes.APPROVE.name.toUpperCase():
-                        result = await Operations.executeApproveCall(directory, call, agentID);
-                        break;
+                        return await Operations.executeReportCall(directory, call, agentID);
                     case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
-                        result = await Operations.executeClarifyCall(directory, call, agentID);
-                        break;
+                        return await Operations.executeClarifyCall(directory, call, agentID);
                     case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
-                        result = await Operations.executeRecruitCall(directory, call, agentID);
-                        break;
+                        return await Operations.executeRecruitCall(directory, call, agentID);
                     case Standards.systemCallTypes.PHASE.name.toUpperCase():
-                        result = await Operations.executePhaseCall(directory, call, agentID);
-                        break;
+                        return await Operations.executePhaseCall(directory, call, agentID);
                     default:
-                        result = { callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` };
-                        break;
+                        return { callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` };
                 }
-                results.push(result);
-                directory.processedCallIDs.add(call.id);
             } catch (error) {
                 console.error(`%c[System] [SCD] Failed to execute call ${call.id} of type ${call.type}. Error: ${error.message}`, "color: red;");
-                results.push({
+                return {
                     callID: call.id,
                     status: "FAILED",
                     error: error.message
-                });
+                };
             }
-        }
+        });
 
-        console.log(`%c[System] [SCD] All calls for agent ${agentID} processed. Sending aggregated results.`, "background-color: #90EE90;");
-        if (results.length > 0) {
-            await Operations.sendCallResultsMessage(directory, agentID, results);
-        } else {
-            // If there were no calls to process (e.g., all were skipped), set agent back to Idle.
-            directory.setAgentStatus(agentID, "Idle");
-        }
-    }
+        // Wait for all calls to settle
+        const results = await Promise.all(callPromises);
 
-    static async executeInteractiveCalls(directory, interactiveCalls, agentID) {
-        console.log(`%c[System] [SCD] Beginning interactive session for agent ${agentID} with ${interactiveCalls.length} calls.`, "background-color: #CBC3E3;");
-        const results = [];
-        for (const call of interactiveCalls) {
-            try {
-                let result;
-                switch (call.type.toUpperCase()) {
-                    case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
-                        result = await Operations.executeClarifyCall(directory, call, agentID);
-                        break;
-                    case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
-                        result = await Operations.executeRecruitCall(directory, call, agentID);
-                        break;
-                    case Standards.systemCallTypes.PHASE.name.toUpperCase():
-                        result = await Operations.executePhaseCall(directory, call, agentID);
-                        break;
-                }
-                if (result) {
-                    results.push(result);
-                }
-                directory.processedCallIDs.add(call.id); // Mark as processed after successful execution
-            } catch (error) {
-                console.error(`%c[System] [SCD] Failed to execute interactive call ${call.id} of type ${call.type}. Error: ${error.message}`, "color: red;");
-                // TODO: Send a system message back to the original calling agent with the failure.
-                results.push({
-                    callID: call.id,
-                    status: "FAILED",
-                    error: error.message
-                });
-            }
-        }
-        console.log(`%c[System] [SCD] Interactive session for agent ${agentID} complete.`, "background-color: #CBC3E3;");
-        return results;
+        // All calls have been processed, now update the agent's state
+        agent.unresolvedCalls = [];
+        directory.setAgentStatus(agentID, "Idle");
+        console.log(`%c[System] [SCD] All initial calls for agent ${agentID} have been resolved.`, "background-color: #90EE90;");
+
+        // Send one consolidated report of all call results back to the agent
+        console.log(`%c[System] [SCD] Consolidated call results for agent ${agentID}:`, "background-color: #90EE90;", results);
+        await Operations.sendCallResultsMessage(directory, agentID, JSON.stringify({ results }, null, 2));
     }
 
     static async executeOrderCall(directory, parsedCall, agentID) {
@@ -710,11 +566,11 @@ ${JSON.stringify(argumentsObject, null, 2)}
         const { orderString, recipientAgentID } = parsedCall.payload;
         const agent = directory.agents.get(agentID);
         agent.pendingOrders.push(parsedCall.id);
-        await Operations.sendOrderMessage(directory, recipientAgentID, orderString, parsedCall.id, agentID);
+        // await Operations.sendOrderMessage(directory, recipientAgentID, orderString, parsedCall.id, agentID);
         return {
             callID: parsedCall.id,
-            status: "SUCCESS",
-            details: `Order sent to agent ${recipientAgentID}.`
+            status: "FAILURE",
+            details: `TODO: Not implemented. Order for agent ${recipientAgentID} with ID ${parsedCall.id} was not sent.`
         };
     }
 
@@ -857,46 +713,6 @@ ${JSON.stringify(argumentsObject, null, 2)}
             });
 
             root.render(formElement);
-        });
-    }
-
-    static executeApproveCall(directory, parsedCall, agentID) {
-        return new Promise(async (resolve, reject) => {
-            console.log(`%c[System] [SCD] Executing Approve call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
-            const { originalCallID } = parsedCall.payload;
-            const agent = directory.agents.get(agentID);
-
-            // This is a simplified logic. We assume the original call is stored somewhere accessible.
-            // For this implementation, we'll assume the approval means we can now execute the original call.
-            // A proper implementation would need to retrieve the original call's details.
-            // For now, we'll just simulate the next step.
-
-            if (agent.rank !== Standards.agentRanks.CHIEF) {
-                // Not the chief, so pass it up the chain.
-                // This part of logic needs a way to get the original call.
-                // For now, let's assume the original call is passed along, which it is in sendApprovalRequestMessage.
-                // But an APPROVE call doesn't have the full original call. This is a design flaw to be fixed.
-                console.log(`%c[System] [SCD] Agent ${agentID} approved call ${originalCallID}. Passing up to their superior.`, "background-color: #CBC3E3;");
-                // This would require another sendApprovalRequestMessage, but with the *current* agent as sender.
-                // This is getting complex and suggests a better state management for pending calls.
-                // Let's just resolve for now.
-                resolve({
-                    callID: parsedCall.id,
-                    status: "SUCCESS",
-                    details: `Approval for ${originalCallID} forwarded.`
-                });
-            } else {
-                // The Chief has approved. We can't execute the original call because we don't have its payload here.
-                // This is a limitation of the current implementation.
-                // We will log a success and resolve. The user will need to re-issue the call.
-                // A better implementation would store pending calls in the directory.
-                console.log(`%c[System] [SCD] Chief ${agentID} has approved call ${originalCallID}. In a real scenario, the call would execute now.`, "background-color: #90EE90;");
-                resolve({
-                    callID: parsedCall.id,
-                    status: "SUCCESS",
-                    details: `Call ${originalCallID} was approved by the Chief. The originating agent should be notified to proceed.`
-                });
-            }
         });
     }
 
