@@ -1,4 +1,0 @@
-{"id":"82945b988629a52978ff2af8921f72d9","type":"util","start":1751851770702,"name":"generate","end":1751851783101.598,"status":0}
-{"id":"c0dfa4fb1eddf3506ee71b61ffffb91f","type":"UNKNOWN","start":1751851833404,"name":"GET /","end":1751851833631.9153,"status":0}
-{"id":"44cb0a7c57c7e2e7268f2c6becdc993b","type":"util","start":1751851837244,"name":"generate","end":1751851856208.9917,"status":0}
-{"id":"bb87245211461a9b2a05c7010bc65461","type":"UNKNOWN","start":1751851837238,"name":"POST /api/awakenAgent","end":1751851856211.8843,"status":0}

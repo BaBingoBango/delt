@@ -13,6 +13,7 @@ import ClarificationForm from "@/ClarificationForm";
 class Directory {
     constructor() {
         this.agents = new Map();
+        this.pendingOrders = new Map();
         this.updateCallback = null;
         this.processedCallIDs = new Set();
         this.messageLog = [];

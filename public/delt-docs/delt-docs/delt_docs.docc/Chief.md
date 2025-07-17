@@ -54,16 +54,6 @@ As the Chief, you are the only agent who can directly ask the user questions usi
 
 ```plaintext
 [Log] {
-  "REFUSE": {
-    "name": "Refuse",
-    "description": "Refuse an order from the user or a superior agent due to safety or program policies",
-    "parameters": [
-      "reasoning"
-    ],
-    "securityPolicy": {
-      "description": "Requires no authority. Any agent can execute this call without approval."
-    }
-  },
   "CLARIFY": {
     "name": "Clarify",
     "description": "Request clarification from the user.",
@@ -74,7 +64,7 @@ As the Chief, you are the only agent who can directly ask the user questions usi
       "options"
     ],
     "securityPolicy": {
-      "description": "Requires approval from every superior as well as the user."
+      "description": "Requires approval from every superior."
     }
   },
   "RECRUIT": {
@@ -90,10 +80,11 @@ As the Chief, you are the only agent who can directly ask the user questions usi
   },
   "ORDER": {
     "name": "Order",
-    "description": "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Will fail if there are no subordinates.",
+    "description": "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Use a unique sequence ID. Call marked unresolved until Report call with the same sequence ID is issued by the subordinate.",
     "parameters": [
       "orderString",
-      "recipientAgentID"
+      "recipientAgentID",
+      "orderSequenceID"
     ],
     "securityPolicy": {
       "description": "Requires no authority. Any agent can execute this call without approval."
@@ -101,10 +92,10 @@ As the Chief, you are the only agent who can directly ask the user questions usi
   },
   "REPORT": {
     "name": "Report",
-    "description": "Submit a report to your direct superior in response to an order.",
+    "description": "Submit a report to your direct superior in response to an order. Use the same sequence ID. Include all parts of your response in the reportString field.",
     "parameters": [
       "reportString",
-      "originalOrderID"
+      "originalOrderSequenceID"
     ],
     "securityPolicy": {
       "description": "Requires no authority. Any agent can execute this call without approval."

@@ -8,10 +8,11 @@
 import {genkit} from "genkit";
 import {googleAI} from "@genkit-ai/googleai";
 import openAI, {o3} from "genkitx-openai";
+import anthropic, {claude4Opus} from "genkitx-anthropic";
 
 // Gemini 2.5 Pro
 const gemini = genkit({
-    plugins: [googleAI()],
+    plugins: [googleAI()], // Key: process.env.GOOGLE_GENAI_API_KEY
     model: googleAI.model('gemini-2.5-pro'),
 });
 
@@ -20,12 +21,18 @@ const chatgpt = genkit({
     plugins: [openAI({ apiKey: process.env.OPENAI_API_KEY })],
     model: o3,
 });
-console.log("%c[System] [awakenAgent.js] AI models initialized!", "background-color: #CBC3E3;");
+
+// Claude Opus 4
+const claude = genkit({
+    plugins: [anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })],
+    model: claude4Opus,
+});
 
 export default async function handler(req, res) {
     // Ensure the request method is POST
     if (req.method !== 'POST') {
         res.setHeader('Allow', 'POST');
+        console.error("[System] [awakenAgent.js] Error: Method Not Allowed. Received " + req.method);
         return res.status(405).end('Method Not Allowed');
     }
     console.log("%c[System] [awakenAgent.js] POST method confirmed.", "background-color: #CBC3E3;");
@@ -34,8 +41,10 @@ export default async function handler(req, res) {
         // Ensure required parameters are provided
         const {systemPrompt, chatHistory, newUserPrompt, team} = req.body;
         if (!systemPrompt || !chatHistory || !newUserPrompt || !team) {
+            const errorMessage = "Error: Requires parameters systemPrompt, chatHistory, newUserPrompt, and team.";
+            console.error("[System] [awakenAgent.js] " + errorMessage);
             return res.status(400).json({
-                error: "Error: Requires parameters systemPrompt, chatHistory, newUserPrompt, and team."
+                error: errorMessage
             });
         }
         console.log("%c[System] [awakenAgent.js] Required parameters are present.", "background-color: #CBC3E3;");
@@ -60,13 +69,6 @@ export default async function handler(req, res) {
             });
             agentResponse = genkitResponse.text;
         } else if (team.name === "Hearts") {
-            const genkitResponse = await gemini.generate({
-                system: systemPrompt,
-                prompt: newUserPrompt,
-                messages: chatHistory,
-            });
-            agentResponse = genkitResponse.text;
-        } else if (team.name === "Spades") {
             const genkitResponse = await chatgpt.generate({
                 system: systemPrompt,
                 prompt: newUserPrompt,
@@ -74,8 +76,8 @@ export default async function handler(req, res) {
             });
             agentResponse = genkitResponse.text;
         } else {
-            // Clubs
-            const genkitResponse = await chatgpt.generate({
+            // Spades
+            const genkitResponse = await claude.generate({
                 system: systemPrompt,
                 prompt: newUserPrompt,
                 messages: chatHistory,

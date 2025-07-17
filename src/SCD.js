@@ -62,9 +62,9 @@ class Standards {
         CLUBS: {
             name: "Clubs"
         },
-        SPADES: {
-            name: "Spades"
-        }
+        // SPADES: {
+        //     name: "Spades"
+        // }
     }
 
     static systemMessageTypes = {
@@ -113,12 +113,6 @@ class Standards {
     }
 
     static systemCallTypes = {
-        REFUSE: {
-            name: "Refuse",
-            description: "Refuse an order from the user or a superior agent due to safety or program policies",
-            parameters: ["reasoning"],
-            securityPolicy: Standards.securityPolicies.NONE
-        },
         CLARIFY: {
             name: "Clarify",
             description: "Request clarification from the user.",
@@ -134,14 +128,14 @@ class Standards {
         },
         ORDER: {
             name: "Order",
-            description: "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Will fail if there are no subordinates.",
-            parameters: ["orderString", "recipientAgentID"],
+            description: "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Use a unique sequence ID. Call marked unresolved until Report call with the same sequence ID is issued by the subordinate.",
+            parameters: ["orderString", "recipientAgentID", "orderSequenceID"],
             securityPolicy: Standards.securityPolicies.NONE
         },
         REPORT: {
             name: "Report",
-            description: "Submit a report to your direct superior in response to an order.",
-            parameters: ["reportString", "originalOrderID"],
+            description: "Submit a report to your direct superior in response to an order. Use the same sequence ID. Include all parts of your response in the reportString field.",
+            parameters: ["reportString", "originalOrderSequenceID"],
             securityPolicy: Standards.securityPolicies.NONE
         },
         PHASE: {
@@ -211,7 +205,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
     };
 
     // Generic function to send a system message to an agent; switches to specific functions.
-    static sendSystemMessage(directory, recipientID, type, messageContent = "") {
+    static sendSystemMessage(directory, recipientID, type, messageContent = "", sequenceID = "") {
         if (!directory.agents.has(recipientID)) {
             throw new Error(`Message cannot be sent to agent with ID ${recipientID}. (does not exist)`);
         }
@@ -227,8 +221,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
             case Standards.systemMessageTypes.CALL_RESULTS:
                 Operations.sendCallResultsMessage(directory, recipientID, messageContent).then(() => {}); break;
                 break;
-            case Standards.systemMessageTypes.REPORTING:
-                // This is handled by executeReportCall, not directly.
+            case Standards.systemMessageTypes.ORDERS:
+                Operations.sendOrdersMessage(directory, recipientID, messageContent, sequenceID).then(() => {}); break;
                 break;
             case Standards.systemMessageTypes.APPROVAL_REQUEST:
                 return Operations.sendApprovalRequestMessage(directory, recipientID, messageContent).then(() => {}); break;
@@ -366,60 +360,38 @@ ${JSON.stringify(argumentsObject, null, 2)}
         await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
-    static async sendOrderMessage(directory, recipientID, orderString, originalCallID, senderID) {
-        // Ensure the recipient exists
+    static async sendOrdersMessage(directory, recipientID, messageContent, sequenceID) {
+        // Ensure the recipient & sender exist
         if (!directory.agents.has(recipientID)) {
-            throw new Error(`Cannot send order to agent with ID ${recipientID}. (does not exist)`);
+            throw new Error(`Cannot send orders message to agent with ID ${recipientID}. (does not exist)`);
         }
         const recipient = directory.agents.get(recipientID);
-        const sender = directory.agents.get(senderID);
+        if (!directory.agents.has(recipient.superiorID)) {
+            throw new Error(`Cannot send orders message from agent with ID ${recipientID.superiorID}. (does not exist)`);
+        }
+        const sender = directory.agents.get(recipient.superiorID);
+
+        // Assemble content for the message
+        const senderSignature = `${sender.callSign} (${sender.identifier})`;
+        const messagePrelude =
+            `[Orders from ${senderSignature} to ${recipient.callSign} (${recipientID}) with sequence ID ${sequenceID}:\n\n]`;
 
         // Construct a system message string
         const messageString = Operations.produceSystemMessageString(
             directory,
             recipientID,
             Standards.systemMessageTypes.ORDERS,
-            `ORDER-${originalCallID}`,
-            `Agent ${sender.callSign} (${senderID})`,
+            sequenceID,
+            senderSignature,
             {
-                orderString: orderString,
-                orderID: originalCallID
-            }
+                text: messagePrelude + messageContent,
+            },
         );
 
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
         // Send the message!
-        console.log("%c[System] [SCD] Sending order from ${senderID} to agent ${recipientID}...", "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-                messageLog: directory.messageLog,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
+        console.log("%c[System] [SCD] Sending Orders message...", "background-color: #CBC3E3;");
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
     static async sendReportingMessage(directory, recipientID, reportString, originalOrderID, senderID) {
@@ -521,30 +493,30 @@ ${JSON.stringify(argumentsObject, null, 2)}
         console.log(parsedCalls);
 
         // Set up the async execution objects
-        const callPromises = parsedCalls.map(async (call) => {
+        const callPromises = parsedCalls.map((call) => {
             try {
                 console.log(`%c[System] [SCD] Switching & executing call: ${call.type} (${call.id})`, "background-color: #CBC3E3;");
                 switch (call.type.toUpperCase()) {
                     case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                        return await Operations.executeOrderCall(directory, call, agentID);
+                        return Operations.executeOrderCall(directory, call, agentID);
                     case Standards.systemCallTypes.REPORT.name.toUpperCase():
-                        return await Operations.executeReportCall(directory, call, agentID);
+                        return Operations.executeReportCall(directory, call, agentID);
                     case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
-                        return await Operations.executeClarifyCall(directory, call, agentID);
+                        return Operations.executeClarifyCall(directory, call, agentID);
                     case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
-                        return await Operations.executeRecruitCall(directory, call, agentID);
+                        return Operations.executeRecruitCall(directory, call, agentID);
                     case Standards.systemCallTypes.PHASE.name.toUpperCase():
-                        return await Operations.executePhaseCall(directory, call, agentID);
+                        return Operations.executePhaseCall(directory, call, agentID);
                     default:
-                        return { callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` };
+                        return Promise.resolve({ callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` });
                 }
             } catch (error) {
                 console.error(`%c[System] [SCD] Failed to execute call ${call.id} of type ${call.type}. Error: ${error.message}`, "color: red;");
-                return {
+                return Promise.resolve({
                     callID: call.id,
                     status: "FAILED",
                     error: error.message
-                };
+                });
             }
         });
 
@@ -561,22 +533,36 @@ ${JSON.stringify(argumentsObject, null, 2)}
         await Operations.sendCallResultsMessage(directory, agentID, JSON.stringify({ results }, null, 2));
     }
 
-    static async executeOrderCall(directory, parsedCall, agentID) {
-        console.log(`%c[System] [SCD] Executing Order call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
-        const { orderString, recipientAgentID } = parsedCall.payload;
-        const agent = directory.agents.get(agentID);
-        agent.pendingOrders.push(parsedCall.id);
-        // await Operations.sendOrderMessage(directory, recipientAgentID, orderString, parsedCall.id, agentID);
-        return {
-            callID: parsedCall.id,
-            status: "FAILURE",
-            details: `TODO: Not implemented. Order for agent ${recipientAgentID} with ID ${parsedCall.id} was not sent.`
-        };
+    static executeOrderCall(directory, parsedCall, agentID) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                console.log(`%c[System] [SCD] Executing Order call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+                const { orderString, recipientAgentID, orderSequenceID } = parsedCall.payload;
+
+                if (directory.pendingOrders.has(orderSequenceID)) {
+                    return reject(new Error(`Order with sequence ID ${orderSequenceID} is already pending.`));
+                }
+
+                // Store the resolve function to be called by the Report call
+                directory.pendingOrders.set(orderSequenceID, {
+                    resolve: resolve,
+                    call: parsedCall,
+                    callerAgentID: agentID
+                });
+
+                await Operations.sendSystemMessage(
+                    directory, recipientAgentID, Standards.systemMessageTypes.ORDERS, orderString, orderSequenceID
+                );
+                // The promise will be resolved when the corresponding Report is received.
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
     static async executeReportCall(directory, parsedCall, agentID) {
         console.log(`%c[System] [SCD] Executing Report call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
-        const { reportString, originalOrderID } = parsedCall.payload;
+        const { reportString, originalOrderSequenceID } = parsedCall.payload;
         const reportingAgent = directory.agents.get(agentID);
 
         if (!reportingAgent.superiorID) {
@@ -588,16 +574,27 @@ ${JSON.stringify(argumentsObject, null, 2)}
             throw new Error(`Superior agent with ID ${reportingAgent.superiorID} not found.`);
         }
 
-        // Forward the report to the superior.
-        await Operations.sendReportingMessage(directory, superior.identifier, reportString, originalOrderID, agentID);
+        // Forward the report to the superior
+        // await Operations.sendReportingMessage(directory, superior.identifier, reportString, originalOrderSequenceID, agentID);
 
-        // Remove the original order ID from the superior's list of pending orders.
-        superior.pendingOrders = superior.pendingOrders.filter(id => id !== originalOrderID);
+        // Resolve the original order call
+        if (directory.pendingOrders.has(originalOrderSequenceID)) {
+            const pendingOrder = directory.pendingOrders.get(originalOrderSequenceID);
+            pendingOrder.resolve({
+                callID: pendingOrder.call.id,
+                status: "SUCCESS",
+                details: `Order ${originalOrderSequenceID} was reported on by agent ${agentID}.`
+            });
+            directory.pendingOrders.delete(originalOrderSequenceID);
+            console.log(`%c[System] [SCD] Resolved pending order with sequence ID: ${originalOrderSequenceID}`, "background-color: #90EE90;");
+        } else {
+            console.warn(`%c[System] [SCD] Received report for non-pending or already resolved order sequence ID: ${originalOrderSequenceID}`, "color: orange;");
+        }
 
         return {
             callID: parsedCall.id,
             status: "SUCCESS",
-            details: `Report for order ${originalOrderID} sent to superior ${superior.identifier}.`
+            details: `Report for order ${originalOrderSequenceID} sent to superior ${superior.identifier}.`
         };
     }
 
@@ -764,7 +761,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
                         [],
                         newAgentDetails.team
                     );
-                    console.log(`%c[System] [SCD] Successfully recruited new agent with ID: ${newAgentID}`, "background-color: #90EE90;");
+                    console.log(`%c[System] [SCD] Successfully recruited new agent with ID: ${newAgentID}. Details: Call Sign: ${newAgentDetails.callSign}, Title: "${newAgentDetails.title}", Rank: ${newAgentDetails.rank.name}, Team: ${newAgentDetails.team.name}, Superior ID: ${agentID}`, "background-color: #90EE90;");
+
                     resolve({
                         callID: parsedCall.id,
                         status: "SUCCESS",

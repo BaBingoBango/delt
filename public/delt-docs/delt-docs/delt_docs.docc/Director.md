@@ -56,16 +56,6 @@ If you need to ask the user a question, you must use the `CLARIFY` system call. 
 
 ```plaintext
 [Log] {
-  "REFUSE": {
-    "name": "Refuse",
-    "description": "Refuse an order from the user or a superior agent due to safety or program policies",
-    "parameters": [
-      "reasoning"
-    ],
-    "securityPolicy": {
-      "description": "Requires no authority. Any agent can execute this call without approval."
-    }
-  },
   "CLARIFY": {
     "name": "Clarify",
     "description": "Request clarification from the user.",
@@ -92,10 +82,11 @@ If you need to ask the user a question, you must use the `CLARIFY` system call. 
   },
   "ORDER": {
     "name": "Order",
-    "description": "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Will fail if there are no subordinates.",
+    "description": "Instruct a subordinate agent to perform a task. The orderString should be clear, concise instructions. Use a unique sequence ID. Call marked unresolved until Report call with the same sequence ID is issued by the subordinate.",
     "parameters": [
       "orderString",
-      "recipientAgentID"
+      "recipientAgentID",
+      "orderSequenceID"
     ],
     "securityPolicy": {
       "description": "Requires no authority. Any agent can execute this call without approval."
@@ -103,10 +94,10 @@ If you need to ask the user a question, you must use the `CLARIFY` system call. 
   },
   "REPORT": {
     "name": "Report",
-    "description": "Submit a report to your direct superior in response to an order.",
+    "description": "Submit a report to your direct superior in response to an order. Use the same sequence ID. Include all parts of your response in the reportString field.",
     "parameters": [
       "reportString",
-      "originalOrderID"
+      "originalOrderSequenceID"
     ],
     "securityPolicy": {
       "description": "Requires no authority. Any agent can execute this call without approval."
@@ -121,17 +112,6 @@ If you need to ask the user a question, you must use the `CLARIFY` system call. 
     ],
     "securityPolicy": {
       "description": "Only the Chief-rank agent can use this call."
-    }
-  },
-  "APPROVE": {
-    "name": "Approve",
-    "description": "Approve a request from a subordinate agent.",
-    "parameters": [
-      "originalCallID",
-      "justification"
-    ],
-    "securityPolicy": {
-      "description": "Requires no authority. Any agent can execute this call without approval."
     }
   }
 }

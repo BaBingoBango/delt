@@ -19,6 +19,16 @@ import ListItemContent from '@mui/joy/ListItemContent';
 import CircularProgress from '@mui/joy/CircularProgress';
 import Chip from '@mui/joy/Chip';
 
+const getTeamEmoji = (teamName) => {
+    const teamMap = {
+        'Hearts': '♥️',
+        'Diamonds': '♦️',
+        'Clubs': '♣️',
+        'Spades': '♠️',
+    };
+    return teamMap[teamName] || teamName;
+};
+
 function AgentCard({ agent }) {
     const getStatusChip = (status) => {
         switch (status) {
@@ -44,9 +54,10 @@ function AgentCard({ agent }) {
             <ListItemContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
-                        <Typography level="title-md">{agent.callSign} ({agent.rank.name})</Typography>
+                        <Typography level="title-md">{agent.callSign} ({agent.rank.name}) {getTeamEmoji(agent.team.name)}</Typography>
                         <Typography level="body-sm">{agent.title}</Typography>
                         <Typography level="body-xs" textColor="text.tertiary">{agent.identifier}</Typography>
+                        {agent.superiorID && <Typography level="body-xs" textColor="text.tertiary">Superior: {agent.superiorID}</Typography>}
                     </Box>
                     {getStatusChip(agent.status)}
                 </Box>
@@ -101,11 +112,16 @@ export default function HomePageView() {
 
         console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
         const chiefAgentID = directory.recruitNewAgent(
-            "Delta", "Chief of Staff to the User", Standards.agentRanks.CHIEF, null, []
+            "Delta",
+            "Chief of Staff to the User",
+            Standards.agentRanks.CHIEF,
+            null,
+            [],
+            Standards.agentTeams.DIAMONDS
         );
 
         console.log("%c[System] [SIMS] Sending SIM to Agent Delta...", "background-color: #CBC3E3;");
-        Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
+        await Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
     };
 
     return (
