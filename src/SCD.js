@@ -415,39 +415,10 @@ ${JSON.stringify(argumentsObject, null, 2)}
             }
         );
 
-        // Add the user message to the agent's history
-        recipient.chatHistory.push({
-            role: "user",
-            content: messageString,
-        });
-
-        // Get the system prompt
-        const systemPrompt = await Templates.getSystemPrompt(recipient.rank, recipient.team);
-
         // Send the message!
         console.log(`%c[System] [SCD] Sending report from ${senderID} to agent ${recipientID}...`, "background-color: #CBC3E3;");
-        directory.setAgentStatus(recipientID, "Generating...");
-        const res = await fetch("/api/awakenAgent", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                systemPrompt: systemPrompt,
-                chatPrompt: messageString,
-                chatHistory: recipient.chatHistory,
-                messageLog: directory.messageLog,
-            })
-        });
-        if (!res.ok) {
-            directory.setAgentStatus(recipientID, "Idle");
-            throw new Error("Failed to send system message. (API request failed)");
-        }
-
-        // Process the response!
-        const json = await res.json();
-        directory.setAgentStatus(recipientID, "Idle");
-        Scanning.scanAgentResponse(directory, json.response, recipientID);
+        const response = await Awakening.awakenAgent(directory, recipient, messageString);
+        await Scanning.scanAgentResponse(directory, response, recipientID);
     }
 
     static async sendCallResultsMessage(directory, recipientID, messageContent) {
@@ -529,8 +500,11 @@ ${JSON.stringify(argumentsObject, null, 2)}
         console.log(`%c[System] [SCD] All initial calls for agent ${agentID} have been resolved.`, "background-color: #90EE90;");
 
         // Send one consolidated report of all call results back to the agent
-        console.log(`%c[System] [SCD] Consolidated call results for agent ${agentID}:`, "background-color: #90EE90;", results);
-        await Operations.sendCallResultsMessage(directory, agentID, JSON.stringify({ results }, null, 2));
+        const allResults = results.filter(result => result !== null);
+        if (allResults.length > 0) {
+            console.log(`%c[System] [SCD] Consolidated call results for agent ${agentID}:`, "background-color: #90EE90;", allResults);
+            await Operations.sendCallResultsMessage(directory, agentID, JSON.stringify({ results: allResults }, null, 2));
+        }
     }
 
     static executeOrderCall(directory, parsedCall, agentID) {
@@ -574,9 +548,6 @@ ${JSON.stringify(argumentsObject, null, 2)}
             throw new Error(`Superior agent with ID ${reportingAgent.superiorID} not found.`);
         }
 
-        // Forward the report to the superior
-        // await Operations.sendReportingMessage(directory, superior.identifier, reportString, originalOrderSequenceID, agentID);
-
         // Resolve the original order call
         if (directory.pendingOrders.has(originalOrderSequenceID)) {
             const pendingOrder = directory.pendingOrders.get(originalOrderSequenceID);
@@ -590,6 +561,9 @@ ${JSON.stringify(argumentsObject, null, 2)}
         } else {
             console.warn(`%c[System] [SCD] Received report for non-pending or already resolved order sequence ID: ${originalOrderSequenceID}`, "color: orange;");
         }
+
+        // Forward the report to the superior
+        await Operations.sendReportingMessage(directory, superior.identifier, reportString, originalOrderSequenceID, agentID);
 
         return {
             callID: parsedCall.id,
