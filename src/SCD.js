@@ -554,7 +554,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
             pendingOrder.resolve({
                 callID: pendingOrder.call.id,
                 status: "SUCCESS",
-                details: `Order ${originalOrderSequenceID} was reported on by agent ${agentID}.`
+                details: `Report for order ${originalOrderSequenceID} from agent ${agentID}: ${reportString}`
             });
             directory.pendingOrders.delete(originalOrderSequenceID);
             console.log(`%c[System] [SCD] Resolved pending order with sequence ID: ${originalOrderSequenceID}`, "background-color: #90EE90;");
@@ -562,14 +562,9 @@ ${JSON.stringify(argumentsObject, null, 2)}
             console.warn(`%c[System] [SCD] Received report for non-pending or already resolved order sequence ID: ${originalOrderSequenceID}`, "color: orange;");
         }
 
-        // Forward the report to the superior
-        await Operations.sendReportingMessage(directory, superior.identifier, reportString, originalOrderSequenceID, agentID);
-
-        return {
-            callID: parsedCall.id,
-            status: "SUCCESS",
-            details: `Report for order ${originalOrderSequenceID} sent to superior ${superior.identifier}.`
-        };
+        // A report call does not need a result sent back to the caller.
+        // The "result" is the resolution of the superior's original ORDER call.
+        return null;
     }
 
     static executeClarifyCall(directory, parsedCall, agentID) {

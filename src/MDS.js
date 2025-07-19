@@ -17,6 +17,7 @@ class Directory {
         this.updateCallback = null;
         this.processedCallIDs = new Set();
         this.messageLog = [];
+        this.nextAgentID = 1;
     }
 
     setUpdateCallback(callback) {
@@ -48,11 +49,7 @@ class Directory {
     }
 
     generateAgentID() {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-        }
-        // Fall back to a short random string
-        return Math.random().toString(36).substr(2, 9);
+        return this.nextAgentID++;
     }
 
     // Creates a new agent and adds it to the directory. (no security)
@@ -206,7 +203,7 @@ class Scanning {
                     hasMalformedCall = true;
                     break;
                 }
-                const inspectionResult = CallSubmissionAndValidation.inspectSystemCall(directory, uniqueID, callType, payload, agentID);
+                const inspectionResult = await CallSubmissionAndValidation.inspectSystemCall(directory, uniqueID, callType, payload, agentID);
                 if (!inspectionResult) {
                     const errorMessage = `Call ID ${uniqueID} failed inspection.`;
                     console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
@@ -224,6 +221,7 @@ class Scanning {
                 };
                 parsedCalls.push(parsedCall);
                 console.log(`%c[System] [MDS] Successfully parsed and validated call ID ${uniqueID}`, "color: green;");
+                console.log("Inspection Result:", inspectionResult);
 
             } catch (error) {
                 const errorMessage = `Malformed Call ID ${uniqueID}: Invalid JSON. Error: ${error.message}`;
@@ -380,16 +378,30 @@ class CallSubmissionAndValidation {
             }
         }
 
-        // Specific call validation
+        // Specific Call-Type Validation
+        //
+        // This section checks for specific rules that apply to certain call types. For example, Order calls can only
+        // be issued to a direct subordinate of the agent making the call, and the recipient agent must exist.
+        console.log(`%c[System] [MDS] Performing specific validation for call type ${type}...`, "color: blue;");
         switch (type.toUpperCase()) {
             case Standards.systemCallTypes.ORDER.name.toUpperCase():
-                // Make sure the agent being ordered is a subordinate of the agent making the call, and that it exists
-                if (!payload.recipientAgentID || !directory.agents.has(payload.recipientAgentID)) {
-                    console.warn(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: recipient agent ID ${payload.recipientAgentID} does not exist.`, "color: red;");
+                // Normalize recipientAgentID to a number
+                const recipientId = Number(payload.recipientAgentID);
+
+                // Make sure the agent being ordered exists
+                if (!recipientId || !directory.agents.has(recipientId)) {
+                    console.error(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: recipient agent ID ${recipientId} does not exist.`, "color: red;");
                     return false;
                 }
+                // Make sure the recipient is a subordinate of the caller
+                if (!agent.subordinateIDs.includes(recipientId)) {
+                    console.error(`%c[System] [MDS] Call ${id} of type ${type} failed inspection: Recipient agent ${recipientId} is not a subordinate of calling agent ${agentID}.`, "color: red;");
+                    return false;
+                }
+                break;
         }
 
+        // If we reach this point, the call has passed inspection!
         return true;
     }
 
