@@ -137,11 +137,11 @@ export default function HomePageView() {
             }}
         >
             <Head>
-                <title>delt</title>
+                <title>Double Act</title>
             </Head>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography level="h2">delt</Typography>
+                <Typography level="h2">Version 0.1.0</Typography>
                 {hasCreatedProject && (
                     <Chip color="primary" variant="soft">
                         <Typography level="body-sm" sx={{ fontFamily: 'monospace' }}>

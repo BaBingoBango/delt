@@ -124,7 +124,7 @@ class Standards {
             name: "Recruit",
             description: "Request to recruit a new direct subordinate agent. The rank will be one lower than the caller's rank. The title is caller-chosen and should describe the role of the new agent.",
             parameters: ["justification", "title"],
-            securityPolicy: Standards.securityPolicies.RECRUITMENT
+            securityPolicy: Standards.securityPolicies.COMPLETE_CHAIN
         },
         ORDER: {
             name: "Order",
@@ -205,7 +205,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
     };
 
     // Generic function to send a system message to an agent; switches to specific functions.
-    static sendSystemMessage(directory, recipientID, type, messageContent = "", sequenceID = "") {
+    static async sendSystemMessage(directory, recipientID, type, messageContent = "", sequenceID = "") {
         if (!directory.agents.has(recipientID)) {
             throw new Error(`Message cannot be sent to agent with ID ${recipientID}. (does not exist)`);
         }
@@ -213,21 +213,21 @@ ${JSON.stringify(argumentsObject, null, 2)}
         // Switch off the type of system message
         switch (type) {
             case Standards.systemMessageTypes.SIM:
-                Operations.sendStandardInitialMessage(directory, recipientID).then(() => {}); break;
+                await Operations.sendStandardInitialMessage(directory, recipientID); break;
             case Standards.systemMessageTypes.BLANK_RESPONSE_WARNING:
-                Operations.sendBlankResponseWarningMessage(directory, recipientID).then(() => {}); break;
+                await Operations.sendBlankResponseWarningMessage(directory, recipientID); break;
             case Standards.systemMessageTypes.RUNAWAY_CALL_WARNING:
-                Operations.sendRunawayCallWarningMessage(directory, recipientID).then(() => {}); break;
+                await Operations.sendRunawayCallWarningMessage(directory, recipientID); break;
             case Standards.systemMessageTypes.CALL_RESULTS:
-                Operations.sendCallResultsMessage(directory, recipientID, messageContent).then(() => {}); break;
+                await Operations.sendCallResultsMessage(directory, recipientID, messageContent);
                 break;
             case Standards.systemMessageTypes.ORDERS:
-                Operations.sendOrdersMessage(directory, recipientID, messageContent, sequenceID).then(() => {}); break;
+                await Operations.sendOrdersMessage(directory, recipientID, messageContent, sequenceID);
                 break;
             case Standards.systemMessageTypes.APPROVAL_REQUEST:
-                return Operations.sendApprovalRequestMessage(directory, recipientID, messageContent).then(() => {}); break;
+                return await Operations.sendApprovalRequestMessage(directory, recipientID, messageContent);
             case Standards.systemMessageTypes.MALFORMED_CALL_WARNING:
-                Operations.sendMalformedCallWarningMessage(directory, recipientID, messageContent).then(() => {});
+                await Operations.sendMalformedCallWarningMessage(directory, recipientID, messageContent);
                 break;
             default:
                 throw new Error(`Cannot deliver system message of type: ${type}. (type does not exist)`);
@@ -513,6 +513,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 console.log(`%c[System] [SCD] Executing Order call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
                 const { orderString, recipientAgentID, orderSequenceID } = parsedCall.payload;
 
+
                 if (directory.pendingOrders.has(orderSequenceID)) {
                     return reject(new Error(`Order with sequence ID ${orderSequenceID} is already pending.`));
                 }
@@ -525,7 +526,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 });
 
                 await Operations.sendSystemMessage(
-                    directory, recipientAgentID, Standards.systemMessageTypes.ORDERS, orderString, orderSequenceID
+                    directory, Number(recipientAgentID), Standards.systemMessageTypes.ORDERS, orderString, orderSequenceID
                 );
                 // The promise will be resolved when the corresponding Report is received.
             } catch (error) {

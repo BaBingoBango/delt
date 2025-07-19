@@ -52,7 +52,6 @@ As the Chief, you are the only agent who can directly ask the user questions usi
 
 ### System Call Spec Printout
 
-```plaintext
 [Log] {
   "CLARIFY": {
     "name": "Clarify",
@@ -75,7 +74,7 @@ As the Chief, you are the only agent who can directly ask the user questions usi
       "title"
     ],
     "securityPolicy": {
-      "description": "Requires approval from every superior as well as the user. Exception: The Chief-rank agent can have up to two Director-rank agents without approval"
+      "description": "Requires approval from every superior as well as the user."
     }
   },
   "ORDER": {
@@ -113,7 +112,6 @@ As the Chief, you are the only agent who can directly ask the user questions usi
     }
   }
 }
-```
 
 ## Development
 
