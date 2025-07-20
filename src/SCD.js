@@ -70,28 +70,36 @@ class Standards {
 
     static systemMessageTypes = {
         SIM: {
-            name: "Standard Initial Message"
+            name: "Standard Initial Message",
+            description: "Initial message prompting the Chief-rank agent to begin operations. Only relevant for the Chief-rank agent.",
         },
         BLANK_RESPONSE_WARNING: {
             name: "Blank Response Warning",
+            description: "Warning sent to an agent who submitted a blank response (no system calls). This is a warning and the agent may attempt a new response.",
         },
         CALL_RESULTS: {
             name: "Call Results",
+            description: "Results of system calls executed on behalf of an agent. This is sent to the agent after all calls have been processed.",
         },
         ORDERS: {
             name: "Orders",
+            description: "Orders sent to an agent from their superior. This is a system message that contains the order string and sequence ID.",
         },
         REPORTING: {
             name: "Reporting",
+            description: "A report sent by an agent in response to an order. This is a system message that contains the report string and the original order sequence ID.",
         },
         APPROVAL_REQUEST: {
             name: "Approval Request",
+            description: "A request for approval sent to an agent's superior. This is used for calls that require approval before execution. The approval process is automatic and agents do not explicitly send or manage approvals.",
         },
         MALFORMED_CALL_WARNING: {
             name: "Malformed Call Warning",
+            description: "Warning sent to an agent who submitted a malformed system call. This is a warning and the agent may attempt a new response.",
         },
         RUNAWAY_CALL_WARNING: {
             name: "Runaway Call Warning",
+            description: "Sent when an agent submits a response containing one or more new system calls while they already have unresolved calls pending from a previous submission. This is a warning and the agent may attempt a new response.",
         }
     }
 

@@ -95,7 +95,7 @@ export default function HomePageView() {
     const timerRef = useRef(null);
 
     useEffect(() => {
-        console.log("%c[System] [UJS] Hi there! Welcome to delt! 👋", "background-color: #CBC3E3;");
+        console.log("%c[System] [UJS] Hi there! Welcome to Double Act! 👋", "background-color: #CBC3E3;");
         console.log("%c[System] [UJS] (Debug) System call spec:", "background-color: #CBC3E3;");
         console.log(JSON.stringify(Standards.systemCallTypes, null, 2));
     }, []);
@@ -167,7 +167,7 @@ export default function HomePageView() {
 
             {!hasCreatedProject ? (
                 <Card>
-                    <Typography level="body-md" sx={{mb: 2}}>Welcome to delt. Click the button below to create a new project and hire the initial Chief agent.</Typography>
+                    <Typography level="body-md" sx={{mb: 2}}>Welcome to Double Act. Click the button below to create a new project and hire the initial Chief agent.</Typography>
                     <Button onClick={executeSIMS}>Create Project</Button>
                 </Card>
             ) : (

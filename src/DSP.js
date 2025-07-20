@@ -32,11 +32,12 @@ class Templates {
             };
 
             // Fetch both the rank and team prompt files asynchronously
-            const [rankPrompt, teamPrompt] = await Promise.all([
+            const [allAgentsPrompt, rankPrompt, teamPrompt] = await Promise.all([
+                readPromptFile("All Agents"),
                 readPromptFile(rank.name),
                 readPromptFile(team.name)
             ]);
-            const finalPrompt = `${rankPrompt}\n\n${teamPrompt}`;
+            const finalPrompt = `${allAgentsPrompt}\n\n${rankPrompt}\n\n${teamPrompt}`;
             console.log("%c[System] [DSP] Successfully generated system prompt.", "background-color: #CBC3E3;");
             console.debug("%c[System] [DSP] Final prompt content:", "background-color: #CBC3E3;", finalPrompt);
             return finalPrompt;
@@ -49,7 +50,7 @@ class Templates {
 
     static getEmergencyPrompt() {
         console.log("%c[System] [DSP] Using emergency prompt due to file read error.", "background-color: #CBC3E3;");
-        return `TODO: EMERGENCY PROMPT NOTICE: You are an agent of the user. There has been a catastrophic system failure. Your primary role is to assist the user in their tasks.`;
+        return `TODO: EMERGENCY PROMPT NOTICE: You are an agent of the user. There has been a catastrophic system failure. Your primary role is to assist the user in their tasks. Please acknowledge this emergency and follow the user's instructions. Do not attempt to access any system files or resources that are not explicitly provided by the user. Your actions are limited to the information and tools available to you at this moment.`;
     }
 }
 

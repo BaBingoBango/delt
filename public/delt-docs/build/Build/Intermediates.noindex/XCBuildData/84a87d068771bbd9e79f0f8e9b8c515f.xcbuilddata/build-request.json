@@ -1,0 +1,66 @@
+{
+  "buildCommand" : {
+    "command" : "build",
+    "skipDependencies" : false,
+    "style" : "buildOnly"
+  },
+  "configuredTargets" : [
+    {
+      "guid" : "23523fbe81f1c1a507e4db20473aff1610d2029d47a7810d3350e49380a6bdf3"
+    }
+  ],
+  "containerPath" : "/Users/ethan/delt/public/delt-docs/delt-docs.xcodeproj",
+  "continueBuildingAfterErrors" : false,
+  "dependencyScope" : "workspace",
+  "enableIndexBuildArena" : false,
+  "hideShellScriptEnvironment" : false,
+  "parameters" : {
+    "action" : "docbuild",
+    "activeArchitecture" : "arm64",
+    "activeRunDestination" : {
+      "disableOnlyActiveArch" : false,
+      "platform" : "macosx",
+      "sdk" : "macosx15.5",
+      "sdkVariant" : "iosmac",
+      "supportedArchitectures" : [
+        "arm64e",
+        "arm64",
+        "x86_64"
+      ],
+      "targetArchitecture" : "arm64"
+    },
+    "arenaInfo" : {
+      "buildIntermediatesPath" : "/Users/ethan/delt/public/delt-docs/build/Build/Intermediates.noindex",
+      "buildProductsPath" : "/Users/ethan/delt/public/delt-docs/build/Build/Products",
+      "derivedDataPath" : "/Users/ethan/delt/public/delt-docs/build",
+      "indexDataStoreFolderPath" : "/Users/ethan/delt/public/delt-docs/build/Index.noindex/DataStore",
+      "indexEnableDataStore" : true,
+      "indexPCHPath" : "/Users/ethan/delt/public/delt-docs/build/Index.noindex/PrecompiledHeaders",
+      "pchPath" : "/Users/ethan/delt/public/delt-docs/build/Build/Intermediates.noindex/PrecompiledHeaders"
+    },
+    "configurationName" : "Debug",
+    "overrides" : {
+      "commandLine" : {
+        "table" : {
+
+        }
+      },
+      "synthesized" : {
+        "table" : {
+          "ACTION" : "docbuild",
+          "COLOR_DIAGNOSTICS" : "YES",
+          "diagnostic_message_length" : "169",
+          "ENABLE_PREVIEWS" : "NO",
+          "ENABLE_XOJIT_PREVIEWS" : "YES",
+          "ONLY_ACTIVE_ARCH" : "YES"
+        }
+      }
+    }
+  },
+  "schemeCommand" : "launch",
+  "showNonLoggedProgress" : true,
+  "useDryRun" : false,
+  "useImplicitDependencies" : true,
+  "useLegacyBuildLocations" : false,
+  "useParallelTargets" : true
+}
