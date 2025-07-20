@@ -50,14 +50,28 @@ function AgentCard({ agent }) {
     };
 
     return (
-        <Card variant="outlined" sx={{ mb: 1 }}>
+        <Card
+            variant="outlined"
+            sx={{
+                mb: 1,
+                borderColor: 'danger.500',
+                boxShadow: '0 0 8px rgba(255, 0, 0, 0.15)',
+                fontFamily: 'monospace',
+            }}
+        >
             <ListItemContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
-                        <Typography level="title-md">{agent.callSign} ({agent.rank.name}) {getTeamEmoji(agent.team.name)}</Typography>
-                        <Typography level="body-sm">{agent.title}</Typography>
-                        <Typography level="body-xs" textColor="text.tertiary">{agent.identifier}</Typography>
-                        {agent.superiorID && <Typography level="body-xs" textColor="text.tertiary">Superior: {agent.superiorID}</Typography>}
+                        <Typography level="title-md" sx={{ color: 'danger.500', textTransform: 'uppercase' }}>
+                            {agent.callSign} :: {agent.rank.name} :: TEAM {getTeamEmoji(agent.team.name)}
+                        </Typography>
+                        <Typography level="body-sm" sx={{ fontStyle: 'italic', color: 'neutral.700' }}>
+                            {agent.title}
+                        </Typography>
+                        <Box sx={{ mt: 1, fontSize: 'body-xs' }}>
+                            <Typography textColor="neutral.600">ID: <Typography component="span" textColor="text.primary">{agent.identifier}</Typography></Typography>
+                            {agent.superiorID && <Typography textColor="neutral.600">SUPERIOR: <Typography component="span" textColor="text.primary">{agent.superiorID}</Typography></Typography>}
+                        </Box>
                     </Box>
                     {getStatusChip(agent.status)}
                 </Box>
@@ -141,7 +155,7 @@ export default function HomePageView() {
             </Head>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography level="h2">Version 0.1.0</Typography>
+                <Typography level="h2">Version 0.1.0 (Alpha)</Typography>
                 {hasCreatedProject && (
                     <Chip color="primary" variant="soft">
                         <Typography level="body-sm" sx={{ fontFamily: 'monospace' }}>

@@ -62,12 +62,28 @@ class Directory {
             throw new Error(`Agent with ID ${identifier} already exists.`);
         }
 
-        // Decide a suit of cards at random to assign this agent if not provided
-        // const agentTeam = team || Standards.agentTeams[
-        //     Object.keys(Standards.agentTeams)[Math.floor(Math.random() * Object.keys(Standards.agentTeams).length)]
-        // ];
-        // Always pick Diamonds for now
-        const agentTeam = Standards.agentTeams.DIAMONDS;
+        // Determine suit assignment
+        let agentTeam;
+        if (team) {
+            agentTeam = team;
+        } else if (rank === Standards.agentRanks.CHIEF) {
+            agentTeam = Standards.agentTeams.DIAMONDS;
+        } else {
+            // Weighted random: Diamonds half as likely as other suits
+            const suits = Object.keys(Standards.agentTeams);
+            const weights = suits.map(s => s === 'DIAMONDS' ? 0.5 : 1);
+            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+            let rnd = Math.random() * totalWeight;
+            for (let i = 0; i < suits.length; i++) {
+                rnd -= weights[i];
+                if (rnd < 0) {
+                    agentTeam = Standards.agentTeams[suits[i]];
+                    break;
+                }
+            }
+        }
+        // DEBUG MODE: Always pick Diamonds for now
+        // const agentTeam = Standards.agentTeams.DIAMONDS;
 
         // Create an agent object
         const agent = {
@@ -383,6 +399,23 @@ class CallSubmissionAndValidation {
                 return { success: false, reason };
             }
             console.log(`%c[System] [MDS] Call ${id} of type ${type} has been approved by the complete chain.`, "color: green;");
+
+        } else if (securityPolicy === Standards.securityPolicies.CHIEF_ONLY_WITH_AUTHORIZATION) {
+            // Check if the agent is the Chief
+            if (agent.rank !== Standards.agentRanks.CHIEF) {
+                const reason = `Call ${id} of type ${type} failed inspection: agent ${agentID} is not the Chief.`;
+                console.warn(`%c[System] [MDS] ${reason}`, "color: red;");
+                return { success: false, reason };
+            }
+
+            // Request user approval
+            const isApproved = await CallSubmissionAndValidation.requestUserApproval(agent, type, payload);
+            if (!isApproved) {
+                const reason = `Call ${id} of type ${type} was not approved by the user.`;
+                console.warn(`%c[System] [MDS] ${reason}`, "color: red;");
+                return { success: false, reason };
+            }
+            console.log(`%c[System] [MDS] Call ${id} of type ${type} has been approved by the user.`, "color: green;");
         }
 
         // Specific Call-Type Validation
@@ -391,6 +424,7 @@ class CallSubmissionAndValidation {
         // be issued to a direct subordinate of the agent making the call, and the recipient agent must exist.
         console.log(`%c[System] [MDS] Performing specific validation for call type ${type}...`, "color: blue;");
         switch (type.toUpperCase()) {
+
             case Standards.systemCallTypes.ORDER.name.toUpperCase():
                 // Normalize recipientAgentID to a number
                 const recipientId = Number(payload.recipientAgentID);
@@ -408,6 +442,10 @@ class CallSubmissionAndValidation {
                     return { success: false, reason };
                 }
                 break;
+
+            case Standards.systemCallTypes.COMMAND.name.toUpperCase():
+                // Confirm we are in the Execution phase
+                // TODO: Implement this
         }
 
         // If we reach this point, the call has passed inspection!

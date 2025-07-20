@@ -17,6 +17,7 @@ import {Awakening} from "@/Awakening";
 import {blankResponseWarningMessage} from "../lib/Blank Response Warning";
 import {runawayCallWarningMessage} from "../lib/Runaway Call Warning";
 import {malformedCallWarningMessage} from "../lib/Malformed Call Warning";
+import CommandForm from "@/CommandForm";
 
 class Standards {
     static agentRanks = {
@@ -109,6 +110,9 @@ class Standards {
         },
         CHIEF_ONLY: {
             description: "Only the Chief-rank agent can use this call.",
+        },
+        CHIEF_ONLY_WITH_AUTHORIZATION: {
+            description: "The highest security level. Only the Chief-rank agent can use this call; it also requires authorization from the user.",
         }
     }
 
@@ -143,6 +147,12 @@ class Standards {
             description: "Request to move from the Planning to Execution phase.",
             parameters: ["justification", "depString"],
             securityPolicy: Standards.securityPolicies.CHIEF_ONLY
+        },
+        COMMAND: {
+            name: "Command",
+            description: "Execute an AWS CLI command with approval from the user. Commands must begin with aws and be well-formed. The command will be executed in the user's AWS account. This command may only be run in the Execution phase. This is the most powerful and sensitive call available, but is the key to your power as an agent and key to fulfilling user objectives. You may never interact with the user's local computer. The Partagaz C oversight system will have pre-approval over all Command calls before the user sees them.",
+            parameters: ["justification", "commandString"],
+            securityPolicy: Standards.securityPolicies.CHIEF_ONLY_WITH_AUTHORIZATION
         }
     }
 }
@@ -478,6 +488,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
                         return Operations.executeRecruitCall(directory, call, agentID);
                     case Standards.systemCallTypes.PHASE.name.toUpperCase():
                         return Operations.executePhaseCall(directory, call, agentID);
+                    case Standards.systemCallTypes.COMMAND.name.toUpperCase():
+                        return Operations.executeCommandCall(directory, call, agentID);
                     default:
                         return Promise.resolve({ callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` });
                 }
@@ -753,6 +765,69 @@ ${JSON.stringify(argumentsObject, null, 2)}
             const formElement = React.createElement(RecruitmentForm, {
                 justification,
                 newAgentDetails,
+                onConfirm: handleConfirm,
+                onCancel: handleCancel,
+            });
+
+            root.render(formElement);
+        });
+    }
+
+    static executeCommandCall(directory, parsedCall, agentID) {
+        return new Promise((resolve, reject) => {
+            console.log(`%c[System] [SCD] Executing Command call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+            const { justification, commandString } = parsedCall.payload;
+
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const root = ReactDOM.createRoot(container);
+
+            const cleanup = () => {
+                root.unmount();
+                if (document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+            };
+
+            const handleConfirm = async () => {
+                cleanup();
+                try {
+                    const res = await fetch('/api/executeCommand', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command: commandString }),
+                    });
+
+                    const result = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(result.error || 'Failed to execute command.');
+                    }
+
+                    resolve({
+                        callID: parsedCall.id,
+                        status: "SUCCESS",
+                        details: `Command executed successfully. Output: ${result.output}`
+                    });
+                } catch (error) {
+                    console.error(`%c[System] [SCD] Command execution failed: ${error.message}`, "color: red;");
+                    reject(error);
+                }
+            };
+
+            const handleCancel = () => {
+                cleanup();
+                console.warn(`%c[System] [SCD] Command execution denied by user.`, "color: orange;");
+                resolve({
+                    callID: parsedCall.id,
+                    status: "DENIED",
+                    details: "Command execution was denied by the user."
+                });
+            };
+
+            const formElement = React.createElement(CommandForm, {
+                justification,
+                commandString,
                 onConfirm: handleConfirm,
                 onCancel: handleCancel,
             });
