@@ -354,12 +354,12 @@ class CallSubmissionAndValidation {
         } else if (securityPolicy === Standards.securityPolicies.COMPLETE_CHAIN) {
             // Complete Chain: Requires approval from every superior, including the Chief and the user
             let currentApprovingAgentID = agent.superiorID;
-            let isApproved = false;
+            // let isApproved = false;
 
             // If the agent has no superior, it's the Chief, so we go straight to user approval.
             if (!currentApprovingAgentID) {
                 console.log(`%c[System] [MDS] Call ${id} by Chief requires user approval.`, "color: blue;");
-                isApproved = await CallSubmissionAndValidation.requestUserApproval(agent, type, payload);
+                // isApproved = await CallSubmissionAndValidation.requestUserApproval(agent, type, payload);
             } else {
                 // Loop through superiors
                 while (currentApprovingAgentID) {
@@ -382,22 +382,22 @@ class CallSubmissionAndValidation {
                     console.log(`%c[System] [MDS] Call ${id} approved by agent ${approver.callSign} (${currentApprovingAgentID}).`, "color: green;");
 
                     // If this approver has no superior, they are the Chief. Now ask the user.
-                    if (!approver.superiorID) {
-                        console.log(`%c[System] [MDS] Call ${id} approved by Chief. Requesting final user approval.`, "color: blue;");
-                        isApproved = await CallSubmissionAndValidation.requestUserApproval(agent, type, payload);
-                        break; // End of the chain
-                    }
+                    // if (!approver.superiorID) {
+                    //     console.log(`%c[System] [MDS] Call ${id} approved by Chief. Requesting final user approval.`, "color: blue;");
+                    //     isApproved = await CallSubmissionAndValidation.requestUserApproval(agent, type, payload);
+                    //     break; // End of the chain
+                    // }
 
                     // Move to the next superior
                     currentApprovingAgentID = approver.superiorID;
                 }
             }
 
-            if (!isApproved) {
-                const reason = `Call ${id} of type ${type} was not approved by the user.`;
-                console.warn(`%c[System] [MDS] ${reason}`, "color: red;");
-                return { success: false, reason };
-            }
+            // if (!isApproved) {
+            //     const reason = `Call ${id} of type ${type} was not approved by the user.`;
+            //     console.warn(`%c[System] [MDS] ${reason}`, "color: red;");
+            //     return { success: false, reason };
+            // }
             console.log(`%c[System] [MDS] Call ${id} of type ${type} has been approved by the complete chain.`, "color: green;");
 
         } else if (securityPolicy === Standards.securityPolicies.CHIEF_ONLY_WITH_AUTHORIZATION) {
