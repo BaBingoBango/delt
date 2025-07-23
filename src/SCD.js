@@ -57,12 +57,12 @@ class Standards {
         HEARTS: {
             name: "Hearts"
         },
-        DIAMONDS: {
-            name: "Diamonds"
-        },
-        CLUBS: {
-            name: "Clubs"
-        },
+        // DIAMONDS: {
+        //     name: "Diamonds"
+        // },
+        // CLUBS: {
+        //     name: "Clubs"
+        // },
         // SPADES: {
         //     name: "Spades"
         // }

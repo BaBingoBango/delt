@@ -6,15 +6,15 @@
 //
 
 import {genkit} from "genkit";
-// import {googleAI} from "@genkit-ai/googleai";
+import {googleAI} from "@genkit-ai/googleai";
 import openAI, {o3} from "genkitx-openai";
 import anthropic, {claude4Opus} from "genkitx-anthropic";
 
 // Gemini 2.5 Pro
-// const gemini = genkit({
-//     plugins: [googleAI()], // Key: process.env.GOOGLE_GENAI_API_KEY
-//     model: googleAI.model('gemini-2.5-pro'),
-// });
+const gemini = genkit({
+    plugins: [googleAI()], // Key: process.env.GOOGLE_GENAI_API_KEY
+    model: googleAI.model('gemini-2.5-pro'),
+});
 
 // ChatGPT o3
 const chatgpt = genkit({
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 
             // Switch based off of team
             if (team.name === "Diamonds") {
-                const genkitResponse = await chatgpt.generate({
+                const genkitResponse = await gemini.generate({
                     system: systemPrompt,
                     prompt: newUserPrompt,
                     messages: chatHistory,

@@ -131,8 +131,10 @@ export default function HomePageView() {
             Standards.agentRanks.CHIEF,
             null,
             [],
-            Standards.agentTeams.DIAMONDS
+            Standards.agentTeams.HEARTS
+            // Standards.agentTeams.DIAMONDS
         );
+
 
         console.log("%c[System] [SIMS] Sending SIM to Agent Delta...", "background-color: #CBC3E3;");
         await Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
