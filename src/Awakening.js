@@ -9,7 +9,7 @@ import {Templates} from "@/DSP";
 
 class Awakening {
     // Awaken an agent to respond by issuing it a new user-role prompt which will contain 1 or more system messages
-    static async awakenAgent(directory, agent, newUserPrompt) {
+    static async awakenAgent(directory, agent, newUserPrompt, isApprovalOnly = false) {
 
         // Start by constructing the full system prompt
         const fullSystemPrompt = await Templates.getSystemPrompt(agent.rank, agent.team);
@@ -47,15 +47,26 @@ class Awakening {
         agent.status = "Idle";
         directory.triggerUpdate();
 
-        // Update the agent's chat history with the two new messages it has just experienced
-        agent.chatHistory.push({
-            role: "user",
-            content: [{ text: newUserPrompt }],
-        });
-        agent.chatHistory.push({
-            role: "model",
-            content: [{ text: agentResponse }],
-        });
+        if (!isApprovalOnly) {
+            // Update the agent's chat history with the two new messages it has just experienced
+            agent.chatHistory.push({
+                role: "user",
+                content: [{ text: newUserPrompt }],
+            });
+            agent.chatHistory.push({
+                role: "model",
+                content: [{ text: agentResponse }],
+            });
+        } else {
+            agent.chatHistory.push({
+                role: "user",
+                content: [{ text: "System: You were asked for approval and have responded." }],
+            });
+            agent.chatHistory.push({
+                role: "model",
+                content: [{ text: "Understood. The details have been omitted from my memory to save space." }],
+            });
+        }
 
         // Return the response
         return agentResponse;

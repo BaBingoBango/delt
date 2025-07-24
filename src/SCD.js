@@ -161,6 +161,24 @@ class Standards {
             description: "Execute an AWS CLI command with approval from the user. Commands must begin with aws and be well-formed. The command will be executed in the user's AWS account. This command may only be run in the Execution phase. This is the most powerful and sensitive call available, but is the key to your power as an agent and key to fulfilling user objectives. You may never interact with the user's local computer. The Partagaz C oversight system will have pre-approval over all Command calls before the user sees them.",
             parameters: ["justification", "commandString"],
             securityPolicy: Standards.securityPolicies.CHIEF_ONLY_WITH_AUTHORIZATION
+        },
+        STORE: {
+            name: "Store",
+            description: "Store a document in the Company File System (CFS). The storageString should be a text that is the document to be stored. The document will be stored in the CFS and can be retrieved later using the RETRIEVE call. Upon use of this call, the calling agent will receive a unique storage ID that can be used to retrieve the document later and will automatically forget the document content from their personal context/memory.",
+            parameters: ["storageString"],
+            securityPolicy: Standards.securityPolicies.NONE
+        },
+        RETRIEVE: {
+            name: "Retrieve",
+            description: "Retrieve a document from the Company File System (CFS). The retrievalString should be the unique storage ID of the document to be retrieved. The document will be retrieved from the CFS and can be used in the agent's personal context/memory.",
+            parameters: ["retrievalString"],
+            securityPolicy: Standards.securityPolicies.NONE
+        },
+        FORGET: {
+            name: "Forget",
+            description: "Forget a document from the agent's personal context/memory. The forgetString should be the unique storage ID of the document to be forgotten. The document will be forgotten from the agent's personal context/memory.",
+            parameters: ["retrievalString"],
+            securityPolicy: Standards.securityPolicies.NONE
         }
     }
 }
