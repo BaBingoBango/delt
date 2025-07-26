@@ -12,7 +12,7 @@ class Awakening {
     static async awakenAgent(directory, agent, newUserPrompt, isApprovalOnly = false) {
 
         // Start by constructing the full system prompt
-        const fullSystemPrompt = await Templates.getSystemPrompt(agent.rank, agent.team);
+        const fullSystemPrompt = await Templates.getSystemPrompt(agent.rank, agent.team, agent.customSystemInstructions);
         console.log(`%c[System] [Awakening.js] About to awaken agent ${agent.id}. Debug readout:`, "background-color: #CBC3E3;");
         directory.debugAgent(agent.id);
         console.log(`%c[System] [Awakening.js] Sending prompt:`, "background-color: #CBC3E3;", newUserPrompt);

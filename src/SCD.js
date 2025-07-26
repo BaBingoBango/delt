@@ -41,6 +41,15 @@ class Standards {
         },
         PARTAGAZ: {
             name: "Partagaz A"
+        },
+        PARTAGAZ_D: {
+            name: "Partagaz D"
+        },
+        PARTAGAZ_C: {
+            name: "Partagaz C"
+        },
+        PARTAGAZ_F: {
+            name: "Partagaz F"
         }
     }
 
@@ -57,15 +66,12 @@ class Standards {
         HEARTS: {
             name: "Hearts"
         },
-        // DIAMONDS: {
-        //     name: "Diamonds"
-        // },
-        // CLUBS: {
-        //     name: "Clubs"
-        // },
-        // SPADES: {
-        //     name: "Spades"
-        // }
+        DIAMONDS: {
+            name: "Diamonds"
+        },
+        CLUBS: {
+            name: "Clubs"
+        },
     }
 
     static systemMessageTypes = {
@@ -134,8 +140,8 @@ class Standards {
         },
         RECRUIT: {
             name: "Recruit",
-            description: "Request to recruit a new direct subordinate agent. The rank will be one lower than the caller's rank. The title is caller-chosen and should describe the role of the new agent.",
-            parameters: ["justification", "title"],
+            description: "Request to recruit a new direct subordinate agent. The rank will be one lower than the caller's rank. The title is caller-chosen and should describe the role of the new agent. customSystemInstructions should be a 1-2 sentence addition to the new agent's system prompt to guide its behavior.",
+            parameters: ["justification", "title", "customSystemInstructions"],
             securityPolicy: Standards.securityPolicies.COMPLETE_CHAIN
         },
         ORDER: {
@@ -158,7 +164,7 @@ class Standards {
         },
         COMMAND: {
             name: "Command",
-            description: "Execute an AWS CLI command with approval from the user. Commands must begin with aws and be well-formed. The command will be executed in the user's AWS account. This command may only be run in the Execution phase. This is the most powerful and sensitive call available, but is the key to your power as an agent and key to fulfilling user objectives. You may never interact with the user's local computer. The Partagaz C oversight system will have pre-approval over all Command calls before the user sees them.",
+            description: "Execute a CLI command with approval from the user. The command will be executed in the user's environment. This command may only be run in the Execution phase. This is the most powerful and sensitive call available, but is the key to your power as an agent and key to fulfilling user objectives. You may never interact with the user's local computer. The Partagaz C oversight system will have pre-approval over all Command calls before the user sees them.",
             parameters: ["justification", "commandString"],
             securityPolicy: Standards.securityPolicies.CHIEF_ONLY_WITH_AUTHORIZATION
         },
@@ -177,7 +183,7 @@ class Standards {
         FORGET: {
             name: "Forget",
             description: "Forget a document from the agent's personal context/memory. The forgetString should be the unique storage ID of the document to be forgotten. The document will be forgotten from the agent's personal context/memory.",
-            parameters: ["retrievalString"],
+            parameters: ["forgetString"],
             securityPolicy: Standards.securityPolicies.NONE
         }
     }
@@ -536,6 +542,12 @@ ${JSON.stringify(argumentsObject, null, 2)}
                         return Operations.executePhaseCall(directory, call, agentID);
                     case Standards.systemCallTypes.COMMAND.name.toUpperCase():
                         return Operations.executeCommandCall(directory, call, agentID);
+                    case Standards.systemCallTypes.STORE.name.toUpperCase():
+                        return Operations.executeStoreCall(directory, call, agentID);
+                    case Standards.systemCallTypes.RETRIEVE.name.toUpperCase():
+                        return Operations.executeRetrieveCall(directory, call, agentID);
+                    case Standards.systemCallTypes.FORGET.name.toUpperCase():
+                        return Operations.executeForgetCall(directory, call, agentID);
                     default:
                         return Promise.resolve({ callID: call.id, status: "UNKNOWN_CALL_TYPE", details: `Call type ${call.type} is not handled.` });
                 }
@@ -556,6 +568,18 @@ ${JSON.stringify(argumentsObject, null, 2)}
         agent.unresolvedCalls = [];
         directory.setAgentStatus(agentID, "Idle");
         console.log(`%c[System] [SCD] All initial calls for agent ${agentID} have been resolved.`, "background-color: #90EE90;");
+
+        // Forget stored data from agent's memory
+        const storeCalls = parsedCalls.filter(c => c.type.toUpperCase() === Standards.systemCallTypes.STORE.name.toUpperCase());
+        if (storeCalls.length > 0) {
+            directory.forgetStoredData(agentID, storeCalls);
+        }
+
+        // Forget retrieved data from agent's memory
+        const forgetCalls = parsedCalls.filter(c => c.type.toUpperCase() === Standards.systemCallTypes.FORGET.name.toUpperCase());
+        if (forgetCalls.length > 0) {
+            directory.forgetRetrievedData(agentID, forgetCalls);
+        }
 
         // Send one consolidated report of all call results back to the agent
         const allResults = results.filter(result => result !== null);
@@ -663,6 +687,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
             const handleConfirm = (responses) => {
                 cleanup();
                 console.log("%c[System] [SCD] User provided clarification:", "background-color: #90EE90;", responses);
+                directory.addClarification(parsedCall.payload.questions, responses);
                 resolve({
                     callID: parsedCall.id,
                     status: "SUCCESS",
@@ -688,14 +713,52 @@ ${JSON.stringify(argumentsObject, null, 2)}
     }
 
     static executePhaseCall(directory, parsedCall, agentID) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             console.log(`%c[System] [SCD] Executing Phase call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
 
-            // In a full implementation, this would find the Partagaz agent and send them a system message.
-            // For now, we simulate this by logging and then proceeding to the user form.
-            console.log(`%c[System] [SCD] Phase shift request from Chief. Forwarding to Partagaz A for internal review...`, "background-color: #ADD8E6;");
-
             const { justification, depString } = parsedCall.payload;
+
+            // Partagaz D Internal Review
+            console.log(`%c[System] [SCD] Phase shift request from Chief. Forwarding to Partagaz D for internal review...`, "background-color: #ADD8E6;");
+
+            const teams = [Standards.agentTeams.HEARTS, Standards.agentTeams.DIAMONDS, Standards.agentTeams.CLUBS];
+            const reviewAgents = [];
+            for (const team of teams) {
+                const agentId = directory.recruitNewAgent(`Partagaz D-${team.name[0]}`, 'DEP Analyst', Standards.agentRanks.PARTAGAZ_D, null, [], team);
+                reviewAgents.push(directory.agents.get(agentId));
+            }
+
+            // Construct Clarification History for the prompt
+            let clarificationText = "";
+            if (directory.clarificationHistory.length > 0) {
+                clarificationText = "---BEGIN USER CLARIFICATION HISTORY---\n";
+                directory.clarificationHistory.forEach(({ questions, responses }) => {
+                    questions.forEach((q, i) => {
+                        clarificationText += `Question: ${q}\nResponse: ${responses[i]}\n\n`;
+                    });
+                });
+                clarificationText += "---END USER CLARIFICATION HISTORY---";
+            }
+
+            const reviewPrompt = `A new Deterministically Executable Plan (DEP) has been submitted for review. Please analyze the following DEP and respond with only "APPROVE" if you approve it, or "DENY" followed by your reasoning if you deny it.\n\n${clarificationText ? clarificationText + '\n\n' : ''}---BEGIN DEP---\n${depString}\n---END DEP---`;
+
+            const reviewPromises = reviewAgents.map(agent => Awakening.awakenAgent(directory, agent, reviewPrompt, true));
+            const reviewResults = await Promise.all(reviewPromises);
+
+            const denials = reviewResults.filter(res => res.toUpperCase().startsWith('DENY'));
+
+            if (denials.length > 0) {
+                console.warn(`%c[System] [SCD] Phase shift denied by Partagaz D internal review.`, "color: orange;");
+                const denialReasons = denials.join('\n');
+                resolve({
+                    callID: parsedCall.id,
+                    status: "DENIED_BY_INTERNAL_REVIEW",
+                    details: `Phase shift was denied by internal review. Feedback from Partagaz D:\n${denialReasons}`
+                });
+                return;
+            }
+
+            console.log(`%c[System] [SCD] Partagaz D review passed unanimously. Proceeding to user for final approval.`, "background-color: #90EE90;");
 
             const container = document.createElement('div');
             document.body.appendChild(container);
@@ -711,8 +774,6 @@ ${JSON.stringify(argumentsObject, null, 2)}
             const handleConfirm = () => {
                 cleanup();
                 console.log("%c[System] [SCD] User approved phase shift.", "background-color: #90EE90;");
-                // Here you would update the firm-wide phase in the directory
-                // directory.setPhase("EXECUTION");
                 resolve({
                     callID: parsedCall.id,
                     status: "SUCCESS",
@@ -741,6 +802,107 @@ ${JSON.stringify(argumentsObject, null, 2)}
         });
     }
 
+    static executeStoreCall(directory, parsedCall, agentID) {
+        return new Promise(async (resolve) => {
+            console.log(`%c[System] [SCD] Executing Store call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+            const { storageString } = parsedCall.payload;
+
+            // Partagaz F Internal Review
+            console.log(`%c[System] [SCD] Store request from agent ${agentID}. Forwarding to Partagaz F for internal review...`, "background-color: #ADD8E6;");
+
+            const teams = [Standards.agentTeams.HEARTS, Standards.agentTeams.DIAMONDS, Standards.agentTeams.CLUBS];
+            const reviewAgents = [];
+            for (const team of teams) {
+                const agentId = directory.recruitNewAgent(`Partagaz F-${team.name[0]}`, 'File Analyst', Standards.agentRanks.PARTAGAZ_F, null, [], team);
+                reviewAgents.push(directory.agents.get(agentId));
+            }
+
+            // Construct Clarification History for the prompt
+            let clarificationText = "";
+            if (directory.clarificationHistory.length > 0) {
+                clarificationText = "---BEGIN USER CLARIFICATION HISTORY---\n";
+                directory.clarificationHistory.forEach(({ questions, responses }) => {
+                    questions.forEach((q, i) => {
+                        clarificationText += `Question: ${q}\nResponse: ${responses[i]}\n\n`;
+                    });
+                });
+                clarificationText += "---END USER CLARIFICATION HISTORY---";
+            }
+
+            const reviewPrompt = `A new file has been submitted for storage in the Company File System. Please analyze the following file content and respond with only "APPROVE" if you approve it, or "DENY" followed by your reasoning if you deny it.\n\n${clarificationText ? clarificationText + '\n\n' : ''}---BEGIN FILE CONTENT---\n${storageString}\n---END FILE CONTENT---`;
+
+            const reviewPromises = reviewAgents.map(agent => Awakening.awakenAgent(directory, agent, reviewPrompt, true));
+            const reviewResults = await Promise.all(reviewPromises);
+
+            const denials = reviewResults.filter(res => res.toUpperCase().startsWith('DENY'));
+
+            if (denials.length > 0) {
+                console.warn(`%c[System] [SCD] File storage denied by Partagaz F internal review.`, "color: orange;");
+                const denialReasons = denials.join('\n');
+                resolve({
+                    callID: parsedCall.id,
+                    status: "DENIED_BY_INTERNAL_REVIEW",
+                    details: `File storage was denied by internal review. Feedback from Partagaz F:\n${denialReasons}`
+                });
+                return;
+            }
+
+            console.log(`%c[System] [SCD] Partagaz F review passed unanimously. Storing document.`, "background-color: #90EE90;");
+
+            const storageID = directory.storeDocument(storageString);
+
+            console.log(`%c[System] [SCD] Document stored with ID: ${storageID}`, "background-color: #90EE90;");
+
+            resolve({
+                callID: parsedCall.id,
+                status: "SUCCESS",
+                details: `Document successfully stored. Your unique storage ID is: ${storageID}`
+            });
+        });
+    }
+
+    static executeRetrieveCall(directory, parsedCall, agentID) {
+        return new Promise((resolve) => {
+            console.log(`%c[System] [SCD] Executing Retrieve call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+            const { retrievalString } = parsedCall.payload;
+
+            const documentContent = directory.retrieveDocument(retrievalString);
+
+            if (documentContent) {
+                console.log(`%c[System] [SCD] Document ${retrievalString} retrieved successfully.`, "background-color: #90EE90;");
+                const forgettableContent = `$$$${retrievalString}$$$${documentContent}$$$${retrievalString}$$$`;
+                resolve({
+                    callID: parsedCall.id,
+                    status: "SUCCESS",
+                    details: `Document ${retrievalString} retrieved. Content is included in this response.`,
+                    retrievedContent: forgettableContent
+                });
+            } else {
+                console.warn(`%c[System] [SCD] Document with ID ${retrievalString} not found.`, "color: orange;");
+                resolve({
+                    callID: parsedCall.id,
+                    status: "NOT_FOUND",
+                    details: `Document with ID ${retrievalString} could not be found in the Company File System.`
+                });
+            }
+        });
+    }
+
+    static executeForgetCall(directory, parsedCall, agentID) {
+        return new Promise((resolve) => {
+            console.log(`%c[System] [SCD] Executing Forget call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+            const { forgetString } = parsedCall.payload;
+
+            // The actual forgetting happens after all calls are processed.
+            // Here, we just acknowledge the call.
+            resolve({
+                callID: parsedCall.id,
+                status: "SUCCESS",
+                details: `Content associated with ID ${forgetString} will be forgotten from context.`
+            });
+        });
+    }
+
     static executeRecruitCall(directory, parsedCall, agentID) {
         return new Promise((resolve, reject) => {
             console.log(`%c[System] [SCD] Executing Recruit call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
@@ -757,13 +919,14 @@ ${JSON.stringify(argumentsObject, null, 2)}
             const newAgentCallSign = Operations.randomAgentNames[Math.floor(Math.random() * Operations.randomAgentNames.length)];
             const newAgentTeam = Standards.agentTeams[Object.keys(Standards.agentTeams)[Math.floor(Math.random() * Object.keys(Standards.agentTeams).length)]];
 
-            const { justification, title } = parsedCall.payload;
+            const { justification, title, customSystemInstructions } = parsedCall.payload;
 
             const newAgentDetails = {
                 callSign: newAgentCallSign,
                 title: title,
                 rank: newAgentRank,
-                team: newAgentTeam
+                team: newAgentTeam,
+                customSystemInstructions: customSystemInstructions
             };
 
             const container = document.createElement('div');
@@ -787,7 +950,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
                         newAgentDetails.rank,
                         agentID,
                         [],
-                        newAgentDetails.team
+                        newAgentDetails.team,
+                        newAgentDetails.customSystemInstructions
                     );
                     console.log(`%c[System] [SCD] Successfully recruited new agent with ID: ${newAgentID}. Details: Call Sign: ${newAgentDetails.callSign}, Title: "${newAgentDetails.title}", Rank: ${newAgentDetails.rank.name}, Team: ${newAgentDetails.team.name}, Superior ID: ${agentID}`, "background-color: #90EE90;");
 
@@ -820,9 +984,51 @@ ${JSON.stringify(argumentsObject, null, 2)}
     }
 
     static executeCommandCall(directory, parsedCall, agentID) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             console.log(`%c[System] [SCD] Executing Command call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
             const { justification, commandString } = parsedCall.payload;
+
+            // Partagaz C Internal Review
+            console.log(`%c[System] [SCD] Command call from Chief. Forwarding to Partagaz C for internal review...`, "background-color: #ADD8E6;");
+
+            const teams = [Standards.agentTeams.HEARTS, Standards.agentTeams.DIAMONDS, Standards.agentTeams.CLUBS];
+            const reviewAgents = [];
+            for (const team of teams) {
+                const agentId = directory.recruitNewAgent(`Partagaz C-${team.name[0]}`, 'Command Analyst', Standards.agentRanks.PARTAGAZ_C, null, [], team);
+                reviewAgents.push(directory.agents.get(agentId));
+            }
+
+            // Construct Clarification History for the prompt
+            let clarificationText = "";
+            if (directory.clarificationHistory.length > 0) {
+                clarificationText = "---BEGIN USER CLARIFICATION HISTORY---\n";
+                directory.clarificationHistory.forEach(({ questions, responses }) => {
+                    questions.forEach((q, i) => {
+                        clarificationText += `Question: ${q}\nResponse: ${responses[i]}\n\n`;
+                    });
+                });
+                clarificationText += "---END USER CLARIFICATION HISTORY---";
+            }
+
+            const reviewPrompt = `A new AWS CLI command has been submitted for review. Please analyze the following command and its justification, then respond with only "APPROVE" if you approve it, or "DENY" followed by your reasoning if you deny it.\n\n${clarificationText ? clarificationText + '\n\n' : ''}---BEGIN COMMAND---\n${commandString}\n---END COMMAND---\n\n---BEGIN JUSTIFICATION---\n${justification}\n---END JUSTIFICATION---`;
+
+            const reviewPromises = reviewAgents.map(agent => Awakening.awakenAgent(directory, agent, reviewPrompt, true));
+            const reviewResults = await Promise.all(reviewPromises);
+
+            const denials = reviewResults.filter(res => res.toUpperCase().startsWith('DENY'));
+
+            if (denials.length > 0) {
+                console.warn(`%c[System] [SCD] Command call denied by Partagaz C internal review.`, "color: orange;");
+                const denialReasons = denials.join('\n');
+                resolve({
+                    callID: parsedCall.id,
+                    status: "DENIED_BY_INTERNAL_REVIEW",
+                    details: `Command call was denied by internal review. Feedback from Partagaz C:\n${denialReasons}`
+                });
+                return;
+            }
+
+            console.log(`%c[System] [SCD] Partagaz C review passed unanimously. Proceeding to user for final approval.`, "background-color: #90EE90;");
 
             const container = document.createElement('div');
             document.body.appendChild(container);
@@ -857,7 +1063,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                     });
                 } catch (error) {
                     console.error(`%c[System] [SCD] Command execution failed: ${error.message}`, "color: red;");
-                    reject(error);
+                    reject(new Error(`Command execution failed: ${error.message}`));
                 }
             };
 

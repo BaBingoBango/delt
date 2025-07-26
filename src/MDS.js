@@ -14,10 +14,13 @@ class Directory {
     constructor() {
         this.agents = new Map();
         this.pendingOrders = new Map();
+        this.cfs = new Map(); // Company File System
+        this.nextStorageID = 1;
         this.updateCallback = null;
         this.processedCallIDs = new Set();
         this.messageLog = [];
         this.nextAgentID = 1;
+        this.clarificationHistory = [];
     }
 
     setUpdateCallback(callback) {
@@ -48,42 +51,105 @@ class Directory {
         }
     }
 
+    addClarification(questions, responses) {
+        this.clarificationHistory.push({ questions, responses });
+        console.log(`%c[System] [MDS] Added clarification to history.`, 'color: green;');
+    }
+
+    generateStorageID() {
+        const id = `DOC-${this.nextStorageID.toString().padStart(6, '0')}`;
+        this.nextStorageID++;
+        return id;
+    }
+
+    storeDocument(content) {
+        const storageID = this.generateStorageID();
+        this.cfs.set(storageID, content);
+        console.log(`%c[System] [MDS] Stored document in CFS with ID: ${storageID}`, 'color: green;');
+        return storageID;
+    }
+
+    retrieveDocument(storageID) {
+        if (this.cfs.has(storageID)) {
+            console.log(`%c[System] [MDS] Retrieved document from CFS with ID: ${storageID}`, 'color: green;');
+            return this.cfs.get(storageID);
+        }
+        console.warn(`%c[System] [MDS] Attempted to retrieve non-existent document with ID: ${storageID}`, 'color: orange;');
+        return null;
+    }
+
+    forgetStoredData(agentID, storeCalls) {
+        if (!this.agents.has(agentID)) return;
+        const agent = this.agents.get(agentID);
+        if (agent.chatHistory.length === 0) return;
+
+        const lastMessage = agent.chatHistory[agent.chatHistory.length - 1];
+        if (lastMessage.role !== 'model' || !lastMessage.content[0].text) return;
+
+        let messageText = lastMessage.content[0].text;
+        for (const call of storeCalls) {
+            const storageString = call.payload.storageString;
+            // Replace the storageString with a note about it being stored.
+            messageText = messageText.replace(storageString, `"[Content stored in CFS. This data has been forgotten from my context.]"`);
+        }
+        lastMessage.content[0].text = messageText;
+        console.log(`%c[System] [MDS] Agent ${agentID} has forgotten stored data from its last response.`, 'color: orange;');
+        this.triggerUpdate();
+    }
+
+    forgetRetrievedData(agentID, forgetCalls) {
+        if (!this.agents.has(agentID)) return;
+        const agent = this.agents.get(agentID);
+
+        for (const call of forgetCalls) {
+            const docId = call.payload.forgetString;
+            // Regex to find the content block: $$$DOC-123456$$$...content...$$$DOC-123456$$$
+            const forgetRegex = new RegExp(`\\$\\$\\$${docId}\\$\\$\\$([\\s\\S]*?)\\$\\$\\$${docId}\\$\\$\\$`, 'g');
+            const replacementText = `"[Content from ${docId} has been forgotten from my context.]"`;
+
+            for (const message of agent.chatHistory) {
+                if (message.content && message.content[0] && message.content[0].text) {
+                    if (forgetRegex.test(message.content[0].text)) {
+                        message.content[0].text = message.content[0].text.replace(forgetRegex, replacementText);
+                        console.log(`%c[System] [MDS] Agent ${agentID} has forgotten retrieved data for ID ${docId}.`, 'color: orange;');
+                    }
+                }
+            }
+        }
+        this.triggerUpdate();
+    }
+
     generateAgentID() {
         return this.nextAgentID++;
     }
 
     // Creates a new agent and adds it to the directory. (no security)
-    recruitNewAgent(callSign, title, rank, superiorID, subordinateIDs, team) {
+    recruitNewAgent(callSign, title, rank, superiorID, subordinateIDs, team, customSystemInstructions = "") {
         // Generate a unique ID for the agent
         const identifier = this.generateAgentID();
+
+        console.log("requested team via parameter:", team);
 
         // Check for a duplicate ID
         if (this.agents.has(identifier)) {
             throw new Error(`Agent with ID ${identifier} already exists.`);
         }
 
-        // Determine suit assignment
+        // Team Selection
+        // - If the rank is Chief, the team must be Hearts.
+        // - If the rank is a Partagaz rank, the team is allowed to be specified via parameter.
+        // - Any other rank must be Hearts.
         let agentTeam;
-        if (team) {
-            agentTeam = team;
-        } else if (rank === Standards.agentRanks.CHIEF) {
-            agentTeam = Standards.agentTeams.DIAMONDS;
-        } else {
-            // Weighted random: Diamonds half as likely as other suits
-            const suits = Object.keys(Standards.agentTeams);
-            const weights = suits.map(s => s === 'DIAMONDS' ? 0.5 : 1);
-            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-            let rnd = Math.random() * totalWeight;
-            for (let i = 0; i < suits.length; i++) {
-                rnd -= weights[i];
-                if (rnd < 0) {
-                    agentTeam = Standards.agentTeams[suits[i]];
-                    break;
-                }
+        if (rank === Standards.agentRanks.CHIEF) {
+            agentTeam = Standards.agentTeams.HEARTS;
+        } else if (rank.name.startsWith("PARTAGAZ")) {
+            if (!team || !Object.values(Standards.agentTeams).includes(team)) {
+                throw new Error(`Invalid team specified for Partagaz rank ${rank.name}.`);
             }
+            agentTeam = team;
+        } else {
+            agentTeam = Standards.agentTeams.HEARTS;
         }
-        // DEBUG MODE: Always pick Diamonds for now
-        // const agentTeam = Standards.agentTeams.DIAMONDS;
 
         // Create an agent object
         const agent = {
@@ -101,6 +167,7 @@ class Directory {
             pendingReports: new Map(),
             status: 'Idle',
             unresolvedCalls: [],
+            customSystemInstructions: customSystemInstructions,
         };
 
         // Add this agent to its superior's list of subordinates
@@ -254,6 +321,14 @@ class Scanning {
         if (hasMalformedCall) {
             console.log("%c[System] [MDS] Scan failed. Malformed call detected. Rejecting entire submission and notifying agent.", "background-color: #FFBABA; color: #D8000C;");
             Operations.sendSystemMessage(directory, agentID, Standards.systemMessageTypes.MALFORMED_CALL_WARNING, reasoningText);
+            return;
+        }
+
+        const callTypes = new Set(parsedCalls.map(call => call.type));
+        if (callTypes.size > 1) {
+            const errorMessage = `Agent response contains multiple call types: ${[...callTypes].join(", ")}. Only one call type is allowed per response.`;
+            console.error(`%c[System] [MDS] ${errorMessage}`, "color: red;");
+            Operations.sendSystemMessage(directory, agentID, Standards.systemMessageTypes.MALFORMED_CALL_WARNING, errorMessage);
             return;
         }
 
@@ -446,6 +521,7 @@ class CallSubmissionAndValidation {
             case Standards.systemCallTypes.COMMAND.name.toUpperCase():
                 // Confirm we are in the Execution phase
                 // TODO: Implement this
+                break;
         }
 
         // If we reach this point, the call has passed inspection!

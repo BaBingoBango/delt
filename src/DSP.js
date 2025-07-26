@@ -8,7 +8,7 @@
 import { Standards } from "@/SCD";
 
 class Templates {
-    static async getSystemPrompt(rank, team) {
+    static async getSystemPrompt(rank, team, customInstructions = "") {
         console.log(`%c[System] [DSP] Generating system prompt for rank and team: ${rank.name}, ${team.name}`, "background-color: #CBC3E3;");
 
         // Ensure rank and team are valid
@@ -31,13 +31,28 @@ class Templates {
                 return lines.slice(1).join('\n').trim();
             };
 
-            // Fetch both the rank and team prompt files asynchronously
-            const [allAgentsPrompt, rankPrompt, teamPrompt] = await Promise.all([
-                readPromptFile("All Agents"),
-                readPromptFile(rank.name),
-                readPromptFile(team.name)
-            ]);
-            const finalPrompt = `${allAgentsPrompt}\n\n${rankPrompt}\n\n${teamPrompt}`;
+            let finalPrompt;
+
+            // Check for Partagaz ranks, which have their own unique prompts
+            if (rank.name === Standards.agentRanks.PARTAGAZ_C.name || rank.name === Standards.agentRanks.PARTAGAZ_D.name || rank.name === Standards.agentRanks.PARTAGAZ_F.name) {
+                const partagazPrompt = await readPromptFile(rank.name);
+                console.log(`%c[System] [DSP] Successfully generated Partagaz system prompt for ${rank.name}.`, "background-color: #CBC3E3;");
+                finalPrompt = partagazPrompt;
+            } else {
+                // Fetch both the rank and team prompt files asynchronously
+                const [allAgentsPrompt, rankPrompt, teamPrompt] = await Promise.all([
+                    readPromptFile("All Agents"),
+                    readPromptFile(rank.name),
+                    readPromptFile(team.name)
+                ]);
+                finalPrompt = `${allAgentsPrompt}\n\n${rankPrompt}\n\n${teamPrompt}`;
+            }
+
+            // Append custom instructions if they exist
+            if (customInstructions) {
+                finalPrompt += `\n\n---ADDITIONAL INSTRUCTIONS FROM YOUR SUPERIOR---\n${customInstructions}`;
+            }
+
             console.log("%c[System] [DSP] Successfully generated system prompt.", "background-color: #CBC3E3;");
             console.debug("%c[System] [DSP] Final prompt content:", "background-color: #CBC3E3;", finalPrompt);
             return finalPrompt;
