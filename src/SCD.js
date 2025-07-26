@@ -688,6 +688,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 cleanup();
                 console.log("%c[System] [SCD] User provided clarification:", "background-color: #90EE90;", responses);
                 directory.addClarification(parsedCall.payload.questions, responses);
+                console.log(`%c[System] [SCD] Clarification recorded. Questions:`, "background-color: #90EE90;", parsedCall.payload.questions);
+                console.log(`%c[System] [SCD] Clarification recorded. Responses:`, "background-color: #90EE90;", responses);
                 resolve({
                     callID: parsedCall.id,
                     status: "SUCCESS",
@@ -734,7 +736,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 clarificationText = "---BEGIN USER CLARIFICATION HISTORY---\n";
                 directory.clarificationHistory.forEach(({ questions, responses }) => {
                     questions.forEach((q, i) => {
-                        clarificationText += `Question: ${q}\nResponse: ${responses[i]}\n\n`;
+                        clarificationText += `Question: ${q}\nResponse: ${responses[i] ?? ""}\n\n`;
                     });
                 });
                 clarificationText += "---END USER CLARIFICATION HISTORY---";
@@ -823,7 +825,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 clarificationText = "---BEGIN USER CLARIFICATION HISTORY---\n";
                 directory.clarificationHistory.forEach(({ questions, responses }) => {
                     questions.forEach((q, i) => {
-                        clarificationText += `Question: ${q}\nResponse: ${responses[i]}\n\n`;
+                        clarificationText += `Question: ${q}\nResponse: ${responses[i] ?? ""}\n\n`;
                     });
                 });
                 clarificationText += "---END USER CLARIFICATION HISTORY---";
@@ -1004,7 +1006,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 clarificationText = "---BEGIN USER CLARIFICATION HISTORY---\n";
                 directory.clarificationHistory.forEach(({ questions, responses }) => {
                     questions.forEach((q, i) => {
-                        clarificationText += `Question: ${q}\nResponse: ${responses[i]}\n\n`;
+                        clarificationText += `Question: ${q}\nResponse: ${responses[i] ?? ""}\n\n`;
                     });
                 });
                 clarificationText += "---END USER CLARIFICATION HISTORY---";

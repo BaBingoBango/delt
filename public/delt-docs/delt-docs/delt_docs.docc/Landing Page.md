@@ -1,18 +1,20 @@
 # ``delt_docs``
 
-Local Docs
+Double Act AI System
 
 ## Topics
 
-- <doc:About-System-Prompts>
+- <doc:TODO>
 
 ### Rank Prompts
 
 - <doc:Chief>
+- <doc:Director>
+- <doc:Supervisor>
+- <doc:Attendant>
 
 ### Team Prompts
 
 - <doc:Hearts>
 - <doc:Diamonds>
 - <doc:Clubs>
-- <doc:Spades>

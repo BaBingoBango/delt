@@ -6,7 +6,7 @@
 	<integer>11</integer>
 	<key>logs</key>
 	<dict>
-		<key>0007F365-DA9F-4893-9BC3-23BC9D77A2DE</key>
+		<key>87370BE1-67B4-4D5D-B46F-45AC4D239B9C</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,13 +15,13 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>0007F365-DA9F-4893-9BC3-23BC9D77A2DE.xcactivitylog</string>
+			<string>87370BE1-67B4-4D5D-B46F-45AC4D239B9C.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
 			<dict>
 				<key>highLevelStatus</key>
-				<string>S</string>
+				<string>W</string>
 				<key>totalNumberOfAnalyzerIssues</key>
 				<integer>0</integer>
 				<key>totalNumberOfErrors</key>
@@ -29,7 +29,7 @@
 				<key>totalNumberOfTestFailures</key>
 				<integer>0</integer>
 				<key>totalNumberOfWarnings</key>
-				<integer>0</integer>
+				<integer>1</integer>
 			</dict>
 			<key>schemeIdentifier-containerName</key>
 			<string>delt-docs project</string>
@@ -40,13 +40,13 @@
 			<key>signature</key>
 			<string>Building project delt-docs with scheme delt-docs</string>
 			<key>timeStartedRecording</key>
-			<real>774729728.781618</real>
+			<real>775245425.75299704</real>
 			<key>timeStoppedRecording</key>
-			<real>774729738.80391705</real>
+			<real>775245430.88375497</real>
 			<key>title</key>
 			<string>Building project delt-docs with scheme delt-docs</string>
 			<key>uniqueIdentifier</key>
-			<string>0007F365-DA9F-4893-9BC3-23BC9D77A2DE</string>
+			<string>87370BE1-67B4-4D5D-B46F-45AC4D239B9C</string>
 		</dict>
 	</dict>
 </dict>

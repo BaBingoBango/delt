@@ -20,4 +20,3 @@ For your reference, the following is shared with all the firm's employees:
 - Include placeholders for unknown IDs or values, with instructions on how to obtain them.
 - Note external dependencies and how to validate results.
 - Account for rollbacks, cleanup, and testing.
-- Must include required code, steps, and commands to execute the plan fully. (code may not be attached)

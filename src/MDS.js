@@ -52,8 +52,15 @@ class Directory {
     }
 
     addClarification(questions, responses) {
-        this.clarificationHistory.push({ questions, responses });
-        console.log(`%c[System] [MDS] Added clarification to history.`, 'color: green;');
+        // If `responses` came in as an object keyed by question, turn it into an array in the same order as `questions`
+        const responsesArr = Array.isArray(responses)
+            ? responses
+            : questions.map(q => responses[q]);
+
+        this.clarificationHistory.push({ questions, responses: responsesArr });
+
+        console.log('%c[System] [MDS] Added clarification to history.', 'color: green;');
+        console.log(this.clarificationHistory);
     }
 
     generateStorageID() {
@@ -139,17 +146,23 @@ class Directory {
         // - If the rank is Chief, the team must be Hearts.
         // - If the rank is a Partagaz rank, the team is allowed to be specified via parameter.
         // - Any other rank must be Hearts.
+        console.log(`%c[System] [MDS] Recruiting new agent: ${callSign} (${identifier}) with rank ${rank.name}.`, 'color: orange;');
         let agentTeam;
         if (rank === Standards.agentRanks.CHIEF) {
             agentTeam = Standards.agentTeams.HEARTS;
-        } else if (rank.name.startsWith("PARTAGAZ")) {
+            console.log(`%c[System] [MDS] 1`, 'color: orange;');
+        } else if (rank.name.startsWith("Partagaz")) {
             if (!team || !Object.values(Standards.agentTeams).includes(team)) {
+                console.log(`%c[System] [MDS] 2`, 'color: orange;');
                 throw new Error(`Invalid team specified for Partagaz rank ${rank.name}.`);
             }
+            console.log(`%c[System] [MDS] 3`, 'color: orange;');
             agentTeam = team;
         } else {
+            console.log(`%c[System] [MDS] 4`, 'color: orange;');
             agentTeam = Standards.agentTeams.HEARTS;
         }
+        console.log(`%c[System] [MDS] Recruiting new agent: ${callSign} (${identifier}) with team ${agentTeam.name} and rank ${rank.name}.`, 'color: green;');
 
         // Create an agent object
         const agent = {
