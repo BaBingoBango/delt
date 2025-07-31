@@ -1,6 +1,6 @@
 //
 //  index.jsx
-//  delt
+//  doubleact
 //
 //  Copyright © 2025 Chorale LLC
 //
@@ -14,7 +14,6 @@ import Head from 'next/head';
 import { Directory } from "@/MDS";
 import { Operations, Standards } from "@/SCD";
 import List from '@mui/joy/List';
-import ListItem from '@mui/joy/ListItem';
 import ListItemContent from '@mui/joy/ListItemContent';
 import CircularProgress from '@mui/joy/CircularProgress';
 import Chip from '@mui/joy/Chip';
@@ -111,17 +110,37 @@ export default function HomePageView() {
         return () => clearInterval(timerRef.current);
     }, [hasCreatedProject]);
 
+    /**
+     * Standard Initial Message System (SIMS) execution function.
+     * This function acts as the driver for the entire project.
+     */
     const executeSIMS = async () => {
         setHasCreatedProject(true);
         console.log("%c[System] [SIMS] Accessing new, empty directory...", "background-color: #CBC3E3;");
 
+        // Start by setting up the directory for Gate 00-Wish.
+        // This directory will take in the user's free-text story, goals, and prompts,
+        // transforming it into a self-consistent, achievable, and scoped user wish for AI intake.
+        const gate00directory = new Directory();
+        directoryRef.current = gate00directory;
+        gate00directory.setUpdateCallback((updatedAgents) => {
+            setAgents([...updatedAgents]);
+        });
+        gate00directory.setAgentStatus = gate00directory.setAgentStatus.bind(gate00directory);
+
+        // A. Prep Gate 00 structured output
+        // B. Prep acceptance criteria for gate 00 structured output (partagaz 00)
+        // 1. Hire Wish Director Agent using a new MD
+        // 2. Prepare Wish Attendant Agents using new MD files
+        // 3. Send SIM-00 to Wish Director Agent
+
+        // !! LEGACY CODE SECTION BELOW !!
+        return
         const directory = new Directory();
         directoryRef.current = directory;
-
         directory.setUpdateCallback((updatedAgents) => {
             setAgents([...updatedAgents]);
         });
-
         directory.setAgentStatus = directory.setAgentStatus.bind(directory);
 
         console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
@@ -132,9 +151,7 @@ export default function HomePageView() {
             null,
             [],
             Standards.agentTeams.HEARTS
-            // Standards.agentTeams.DIAMONDS
         );
-
 
         console.log("%c[System] [SIMS] Sending SIM to Agent Delta...", "background-color: #CBC3E3;");
         await Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
@@ -157,7 +174,7 @@ export default function HomePageView() {
             </Head>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography level="h2">Version 0.1.0 (Alpha)</Typography>
+                <Typography level="h2">Version 0.2.0 (Alpha)</Typography>
                 {hasCreatedProject && (
                     <Chip color="primary" variant="soft">
                         <Typography level="body-sm" sx={{ fontFamily: 'monospace' }}>

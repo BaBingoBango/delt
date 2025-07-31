@@ -1,6 +1,6 @@
 //
 //  SCD.js
-//  delt
+//  doubleact
 //
 //  Copyright © 2025 Chorale LLC
 //
@@ -20,6 +20,15 @@ import {malformedCallWarningMessage} from "../lib/Malformed Call Warning";
 import CommandForm from "@/CommandForm";
 
 class Standards {
+    static gates = {
+        WISH: {
+            sequenceNumber: 0,
+            designation: "00",
+            name: "00-Wish",
+            callSign: "Wish",
+        }
+    }
+
     static agentRanks = {
         CHIEF: {
             name: "Chief"

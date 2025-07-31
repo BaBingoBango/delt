@@ -1,6 +1,6 @@
 //
 //  MDS.js
-//  delt
+//  doubleact
 //
 //  Copyright © 2025 Chorale LLC
 //
@@ -131,7 +131,7 @@ class Directory {
     }
 
     // Creates a new agent and adds it to the directory. (no security)
-    recruitNewAgent(callSign, title, rank, superiorID, subordinateIDs, team, customSystemInstructions = "") {
+    recruitNewAgent(callSign, title, rank, superiorID, subordinateIDs, team, customSystemInstructions = "", gate = null) {
         // Generate a unique ID for the agent
         const identifier = this.generateAgentID();
 
@@ -181,6 +181,7 @@ class Directory {
             status: 'Idle',
             unresolvedCalls: [],
             customSystemInstructions: customSystemInstructions,
+            gate: gate || null,
         };
 
         // Add this agent to its superior's list of subordinates
