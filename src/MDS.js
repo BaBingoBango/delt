@@ -581,4 +581,4 @@ class CallSubmissionAndValidation {
 }
 
 // Class Export
-export {Directory, Scanning, CallSubmissionAndValidation};
+export {Directory, Scanning, CallSubmissionAndValidation, ReactDOM, ClarificationForm};

@@ -5,7 +5,9 @@
 //  Copyright © 2025 Chorale LLC
 //
 
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
 import Box from '@mui/joy/Box';
 import Button from '@mui/joy/Button';
 import Typography from '@mui/joy/Typography';
@@ -13,6 +15,7 @@ import Card from '@mui/joy/Card';
 import Head from 'next/head';
 import { Directory } from "@/MDS";
 import { Operations, Standards } from "@/SCD";
+import ClarificationForm from "@/ClarificationForm";
 import List from '@mui/joy/List';
 import ListItemContent from '@mui/joy/ListItemContent';
 import CircularProgress from '@mui/joy/CircularProgress';
@@ -110,6 +113,58 @@ export default function HomePageView() {
         return () => clearInterval(timerRef.current);
     }, [hasCreatedProject]);
 
+    const getUserInitialInput = (directory) => {
+        return new Promise((resolve, reject) => {
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const root = ReactDOM.createRoot(container);
+
+            const cleanup = () => {
+                root.unmount();
+                if (document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+            };
+
+            const handleConfirm = (responses) => {
+                cleanup();
+                const questions = [
+                    "Welcome to Double Act AI! Tell us a little about yourself. Who are you and what do you do? Are you a computer expert or are you new to software?",
+                    "What are your goals for this project? What led you to pursue this? Where did the idea come from?",
+                    "What are specific requirements you have in mind? What is your vision for the completed product?",
+                    "What else should we know about you or your project? Any other context or details you want to share? The system will follow-up with questions automatically when needed."
+                ];
+                directory.addClarification(questions, responses);
+                console.log("%c[System] [SIMS] Initial user input captured.", "background-color: #CBC3E3;");
+                resolve(responses);
+            };
+
+            const handleCancel = () => {
+                cleanup();
+                console.warn(`%c[System] [SIMS] Project creation cancelled by user.`, "color: orange;");
+                setHasCreatedProject(false); // Revert project creation state
+                reject(new Error("Project creation cancelled by user."));
+            };
+
+            const questions = [
+                "Welcome to Double Act AI! Tell us a little about yourself. Who are you and what do you do? Are you a computer expert or are you new to software?",
+                "What are your goals for this project? What led you to pursue this? Where did the idea come from?",
+                "What are specific requirements you have in mind? What is your vision for the completed product?",
+                "What else should we know about you or your project? Any other context or details you want to share? The system will follow-up with questions automatically when needed."
+            ];
+
+            const formElement = React.createElement(ClarificationForm, {
+                questions,
+                options: [[], [], []], // Open-ended questions
+                onConfirm: handleConfirm,
+                onCancel: handleCancel,
+                isInitialInput: true,
+            });
+
+            root.render(formElement);
+        });
+    };
+
     /**
      * Standard Initial Message System (SIMS) execution function.
      * This function acts as the driver for the entire project.
@@ -127,6 +182,15 @@ export default function HomePageView() {
             setAgents([...updatedAgents]);
         });
         gate00directory.setAgentStatus = gate00directory.setAgentStatus.bind(gate00directory);
+
+        // Start by manually issuing a user input form with hard-coded initial questions for the user.
+        try {
+            const initialInputs = await getUserInitialInput(gate00directory);
+            console.log("Initial user inputs:", initialInputs);
+        } catch (error) {
+            console.error(error.message);
+            return; // Stop execution if user cancels
+        }
 
         // A. Prep Gate 00 structured output
         // B. Prep acceptance criteria for gate 00 structured output (partagaz 00)

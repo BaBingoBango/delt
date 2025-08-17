@@ -147,6 +147,13 @@ class Standards {
             parameters: ["reasoning", "questions", "options"],
             securityPolicy: Standards.securityPolicies.ALL_SUPERIORS
         },
+        GENERATE: {
+            name: "Generate",
+            description: "Generate an AI response from a prompt. This is useful for brainstorming, writing code, or getting another perspective from a fresh AI instance.",
+            guidance: "Provide a clear and concise prompt in the promptString parameter. The generation will be performed by a temporary, isolated AI instance.",
+            parameters: ["justification", "promptString"],
+            securityPolicy: Standards.securityPolicies.NONE
+        },
         RECRUIT: {
             name: "Recruit",
             description: "Request to recruit a new direct subordinate agent. The rank will be one lower than the caller's rank. The title is caller-chosen and should describe the role of the new agent. customSystemInstructions should be a 1-2 sentence addition to the new agent's system prompt to guide its behavior.",
@@ -545,6 +552,8 @@ ${JSON.stringify(argumentsObject, null, 2)}
                         return Operations.executeReportCall(directory, call, agentID);
                     case Standards.systemCallTypes.CLARIFY.name.toUpperCase():
                         return Operations.executeClarifyCall(directory, call, agentID);
+                    case Standards.systemCallTypes.GENERATE.name.toUpperCase():
+                        return Operations.executeGenerateCall(directory, call, agentID);
                     case Standards.systemCallTypes.RECRUIT.name.toUpperCase():
                         return Operations.executeRecruitCall(directory, call, agentID);
                     case Standards.systemCallTypes.PHASE.name.toUpperCase():
@@ -657,6 +666,37 @@ ${JSON.stringify(argumentsObject, null, 2)}
         // A report call does not need a result sent back to the caller.
         // The "result" is the resolution of the superior's original ORDER call.
         return null;
+    }
+
+    static executeGenerateCall(directory, parsedCall, agentID) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                console.log(`%c[System] [SCD] Executing Generate call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
+                const { promptString } = parsedCall.payload;
+
+                // Create a disposable agent for the generation task.
+                // This agent is not added to the main directory.
+                const disposableAgent = {
+                    identifier: `disposable-${Date.now()}`,
+                    chatHistory: [],
+                    // A minimal system prompt for a one-off generation.
+                    customSystemInstructions: "You are a helpful assistant. Respond to the user's prompt directly and concisely.",
+                };
+
+                const response = await Awakening.awakenAgent(directory, disposableAgent, promptString, true);
+
+                resolve({
+                    callID: parsedCall.id,
+                    status: "SUCCESS",
+                    details: "Generation successful.",
+                    generatedContent: response
+                });
+
+            } catch (error) {
+                console.error(`%c[System] [SCD] Failed to execute Generate call ${parsedCall.id}. Error: ${error.message}`, "color: red;");
+                reject(error);
+            }
+        });
     }
 
     static executeClarifyCall(directory, parsedCall, agentID) {
@@ -1101,4 +1141,4 @@ ${JSON.stringify(argumentsObject, null, 2)}
 }
 
 // Class Export
-export {Standards, Operations};
+export {Standards, Operations, ClarificationForm};
