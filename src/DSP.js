@@ -38,6 +38,12 @@ class Templates {
                 const partagazPrompt = await readPromptFile(rank.name);
                 console.log(`%c[System] [DSP] Successfully generated Partagaz system prompt for ${rank.name}.`, "background-color: #CBC3E3;");
                 finalPrompt = partagazPrompt;
+
+            // Check for other special ranks
+            } else if (rank.name === Standards.agentRanks.WISH_CHIEF.name) {
+                const wishChiefPrompt = await readPromptFile("Gate 1 Chief");
+                finalPrompt = wishChiefPrompt;
+
             } else {
                 // Fetch both the rank and team prompt files asynchronously
                 const [allAgentsPrompt, rankPrompt, teamPrompt] = await Promise.all([

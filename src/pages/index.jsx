@@ -134,6 +134,29 @@ export default function HomePageView() {
                     "What are specific requirements you have in mind? What is your vision for the completed product?",
                     "What else should we know about you or your project? Any other context or details you want to share? The system will follow-up with questions automatically when needed."
                 ];
+
+                // Debug - set canned responses
+                const defaultIntroAnswers = [
+                    "Hello! My name is Dave, I live in the Pleasant Oaks subdivision in Michigan and am the HOA president. I am a retired bank manager and have very little technical experience. I would love a website for our HOA.",
+                    "My goals are to create an HOA website that allows easy access to information relevant to current and potential residents. I saw similar HOA sites online and was inspired.",
+                    "The pages I would like are Contact Us, Legal Docs, Schools, Dues, Annual Meetings, and News & Events. Dues, Annual Meetings, and News & Events should require sign-in and should be resident only. I envision a simple website that is used for information access.",
+                    "Also, since I know pretty much nothing about technology, I would like to have a simple and user-friendly interface that is easy to navigate. I would also like to have a contact form for residents to reach out with questions or concerns. Since I am unskilled with technology, the blog/updates section should be easy to update without needing to know any coding or anything like that.",
+                ];
+
+                // Normalize to an array
+                const normalized = Array.isArray(responses)
+                    ? responses
+                    : responses == null
+                        ? []
+                        : [responses];
+
+                // Fill blanks with defaults and coerce to string safely
+                responses = defaultIntroAnswers.map((def, index) => {
+                    const val = normalized[index];
+                    const s = typeof val === "string" ? val : val != null ? String(val) : "";
+                    return s.trim() === "" ? def : s;
+                });
+
                 directory.addClarification(questions, responses);
                 console.log("%c[System] [SIMS] Initial user input captured.", "background-color: #CBC3E3;");
                 resolve(responses);
@@ -176,21 +199,40 @@ export default function HomePageView() {
         // Start by setting up the directory for Gate 00-Wish.
         // This directory will take in the user's free-text story, goals, and prompts,
         // transforming it into a self-consistent, achievable, and scoped user wish for AI intake.
-        const gate00directory = new Directory();
-        directoryRef.current = gate00directory;
-        gate00directory.setUpdateCallback((updatedAgents) => {
+        const gate1Directory = new Directory();
+        directoryRef.current = gate1Directory;
+        gate1Directory.setUpdateCallback((updatedAgents) => {
             setAgents([...updatedAgents]);
         });
-        gate00directory.setAgentStatus = gate00directory.setAgentStatus.bind(gate00directory);
+        gate1Directory.setAgentStatus = gate1Directory.setAgentStatus.bind(gate1Directory);
 
         // Start by manually issuing a user input form with hard-coded initial questions for the user.
+        let initialInputs;
         try {
-            const initialInputs = await getUserInitialInput(gate00directory);
+            initialInputs = await getUserInitialInput(gate1Directory);
             console.log("Initial user inputs:", initialInputs);
         } catch (error) {
             console.error(error.message);
             return; // Stop execution if user cancels
         }
+
+        // Set up Gate 1's Chief agent
+        const gate1ChiefID = gate1Directory.recruitNewAgent(
+            Operations.randomAgentNames[Math.floor(Math.random() * Operations.randomAgentNames.length)],
+            "User Wish Chief",
+            Standards.agentRanks.WISH_CHIEF,
+            null,
+            [],
+            Standards.agentTeams.HEARTS
+        );
+
+        // Send the SIM v2
+        await Operations.sendSystemMessage(
+            directoryRef.current,
+            gate1ChiefID,
+            Standards.systemMessageTypes.SIM,
+            "Hello Chief Agent! Initial user responses: " + JSON.stringify(initialInputs, null, 2)
+        );
 
         // A. Prep Gate 00 structured output
         // B. Prep acceptance criteria for gate 00 structured output (partagaz 00)

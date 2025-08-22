@@ -59,6 +59,9 @@ class Standards {
         },
         PARTAGAZ_F: {
             name: "Partagaz F"
+        },
+        WISH_CHIEF: {
+            name: "Wish Chief"
         }
     }
 
@@ -291,7 +294,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
         // Switch off the type of system message
         switch (type) {
             case Standards.systemMessageTypes.SIM:
-                await Operations.sendStandardInitialMessage(directory, recipientID); break;
+                await Operations.sendStandardInitialMessage(directory, recipientID, messageContent); break;
             case Standards.systemMessageTypes.BLANK_RESPONSE_WARNING:
                 await Operations.sendBlankResponseWarningMessage(directory, recipientID); break;
             case Standards.systemMessageTypes.RUNAWAY_CALL_WARNING:
@@ -313,13 +316,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
     }
 
     // Sends a standard initial message (SIM) to the Chief-rank agent.
-    static async sendStandardInitialMessage(directory, recipientID) {
-        // Ensure the recipient is the Chief-rank agent
-        const recipient = directory.agents.get(recipientID);
-        if (recipient.rank !== Standards.agentRanks.CHIEF) {
-            throw new Error("Cannot deliver SIM system message. (can only be sent to a Chief-rank agent)");
-        }
-
+    static async sendStandardInitialMessage(directory, recipientID, messageContent) {
         // Construct a system message string
         const messageString = Operations.produceSystemMessageString(
             directory,
@@ -328,12 +325,13 @@ ${JSON.stringify(argumentsObject, null, 2)}
             "STANDARD INITIAL MESSAGE",
             "User Jump Squad",
             {
-                text: standardInitialMessage
+                text: messageContent,
             },
         );
 
         // Send the message!
-        console.log("%c[System] [SCD] Sending SIM message to Chief-rank agent...", "background-color: #CBC3E3;");
+        const recipient = directory.agents.get(recipientID);
+        console.log("%c[System] [SCD] Sending SIM message...", "background-color: #CBC3E3;");
         const response = await Awakening.awakenAgent(directory, recipient, messageString);
         await Scanning.scanAgentResponse(directory, response, recipientID);
     }

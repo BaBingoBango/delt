@@ -5,9 +5,9 @@
 //  Copyright © 2025 Chorale LLC
 //
 
-import {genkit} from "genkit";
+import {GenerationCommonConfigSchema, genkit, z} from "genkit";
 import {googleAI} from "@genkit-ai/googleai";
-import openAI, {o3} from "genkitx-openai";
+import openAI from "genkitx-openai";
 import anthropic, {claude4Opus} from "genkitx-anthropic";
 
 // Gemini 2.5 Pro
@@ -16,10 +16,35 @@ const gemini = genkit({
     model: googleAI.model('gemini-2.5-pro'),
 });
 
-// ChatGPT o3
+// ChatGPT 5 Thinking
+const gpt5ConfigSchema = GenerationCommonConfigSchema.extend({
+    reasoning_effort: z.enum(["minimal", "low", "medium", "high"]).optional(),
+    verbosity: z.enum(["low", "medium", "high"]).optional(),
+});
 const chatgpt = genkit({
-    plugins: [openAI({ apiKey: process.env.OPENAI_API_KEY })],
-    model: o3,
+    plugins: [
+        openAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            models: [
+                {
+                    name: "gpt-5",
+                    info: {
+                        label: "OpenAI — GPT-5",
+                        versions: ["gpt-5"],
+                        supports: {
+                            multiturn: true,
+                            tools: true,
+                            media: true,
+                            systemRole: true,
+                            output: ["json", "text"],
+                        },
+                    },
+                    configSchema: gpt5ConfigSchema,
+                },
+            ],
+        }),
+    ],
+    model: "openai/gpt-5",
 });
 
 // Claude Opus 4
