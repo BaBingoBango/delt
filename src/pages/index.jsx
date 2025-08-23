@@ -227,40 +227,13 @@ export default function HomePageView() {
         );
 
         // Send the SIM v2
+        // This will begin the "working space" of the chief agent, finished by a successful approved Phase call
         await Operations.sendSystemMessage(
             directoryRef.current,
             gate1ChiefID,
             Standards.systemMessageTypes.SIM,
             "Hello Chief Agent! Initial user responses: " + JSON.stringify(initialInputs, null, 2)
         );
-
-        // A. Prep Gate 00 structured output
-        // B. Prep acceptance criteria for gate 00 structured output (partagaz 00)
-        // 1. Hire Wish Director Agent using a new MD
-        // 2. Prepare Wish Attendant Agents using new MD files
-        // 3. Send SIM-00 to Wish Director Agent
-
-        // !! LEGACY CODE SECTION BELOW !!
-        return
-        const directory = new Directory();
-        directoryRef.current = directory;
-        directory.setUpdateCallback((updatedAgents) => {
-            setAgents([...updatedAgents]);
-        });
-        directory.setAgentStatus = directory.setAgentStatus.bind(directory);
-
-        console.log("%c[System] [SIMS] Hiring Agent Delta (rank: Chief) (title: Chief of Staff to the User)...", "background-color: #CBC3E3;");
-        const chiefAgentID = directory.recruitNewAgent(
-            "Delta",
-            "Chief of Staff to the User",
-            Standards.agentRanks.CHIEF,
-            null,
-            [],
-            Standards.agentTeams.HEARTS
-        );
-
-        console.log("%c[System] [SIMS] Sending SIM to Agent Delta...", "background-color: #CBC3E3;");
-        await Operations.sendSystemMessage(directoryRef.current, chiefAgentID, Standards.systemMessageTypes.SIM);
     };
 
     return (

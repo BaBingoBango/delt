@@ -34,7 +34,7 @@ class Templates {
             let finalPrompt;
 
             // Check for Partagaz ranks, which have their own unique prompts
-            if (rank.name === Standards.agentRanks.PARTAGAZ_C.name || rank.name === Standards.agentRanks.PARTAGAZ_D.name || rank.name === Standards.agentRanks.PARTAGAZ_F.name) {
+            if (rank.name === Standards.agentRanks.PARTAGAZ_C.name || rank.name === Standards.agentRanks.PARTAGAZ_D.name || rank.name === Standards.agentRanks.PARTAGAZ_F.name || rank.name === Standards.agentRanks.PARTAGAZ_1.name) {
                 const partagazPrompt = await readPromptFile(rank.name);
                 console.log(`%c[System] [DSP] Successfully generated Partagaz system prompt for ${rank.name}.`, "background-color: #CBC3E3;");
                 finalPrompt = partagazPrompt;

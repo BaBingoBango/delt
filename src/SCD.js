@@ -62,6 +62,9 @@ class Standards {
         },
         WISH_CHIEF: {
             name: "Wish Chief"
+        },
+        PARTAGAZ_1: {
+            name: "Partagaz 1"
         }
     }
 
@@ -676,6 +679,12 @@ ${JSON.stringify(argumentsObject, null, 2)}
                 // This agent is not added to the main directory.
                 const disposableAgent = {
                     identifier: `disposable-${Date.now()}`,
+                    rank: Standards.agentRanks.ATTENDANT,
+                    callSign: "Disposable",
+                    title: "Disposable Generation Agent",
+                    status: "Idle",
+                    unresolvedCalls: [],
+                    team: Standards.agentTeams.HEARTS,
                     chatHistory: [],
                     // A minimal system prompt for a one-off generation.
                     customSystemInstructions: "You are a helpful assistant. Respond to the user's prompt directly and concisely.",
@@ -702,7 +711,7 @@ ${JSON.stringify(argumentsObject, null, 2)}
             console.log(`%c[System] [SCD] Executing Clarify call with ID: ${parsedCall.id}...`, "background-color: #CBC3E3;");
 
             const agent = directory.agents.get(agentID);
-            if (agent.rank !== Standards.agentRanks.CHIEF) {
+            if (agent.rank !== Standards.agentRanks.CHIEF && agent.rank !== Standards.agentRanks.WISH_CHIEF) {
                 console.log(`%c[System] [SCD] Agent ${agentID} is not Chief. Forwarding Clarify call for approval.`, "background-color: #CBC3E3;");
                 Operations.sendApprovalRequestMessage(directory, agent.superiorID, parsedCall, agentID).then(() => {
                     resolve({
@@ -773,7 +782,15 @@ ${JSON.stringify(argumentsObject, null, 2)}
             const teams = [Standards.agentTeams.HEARTS, Standards.agentTeams.DIAMONDS, Standards.agentTeams.CLUBS];
             const reviewAgents = [];
             for (const team of teams) {
-                const agentId = directory.recruitNewAgent(`Partagaz D-${team.name[0]}`, 'DEP Analyst', Standards.agentRanks.PARTAGAZ_D, null, [], team);
+                // use the new rank and a Gate 1 title/call-sign
+                const agentId = directory.recruitNewAgent(
+                    `Partagaz 1-${team.name[0]}`,
+                    'Gate 1 Analyst',
+                    Standards.agentRanks.PARTAGAZ_1, // <-- switch from PARTAGAZ_D
+                    null,
+                    [],
+                    team
+                );
                 reviewAgents.push(directory.agents.get(agentId));
             }
 

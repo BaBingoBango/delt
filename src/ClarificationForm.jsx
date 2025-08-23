@@ -18,7 +18,8 @@ import {
     Select,
     Option,
     Button,
-    FormHelperText
+    FormHelperText,
+    Box
 } from '@mui/joy';
 
 export default function ClarificationForm({ questions, options, onConfirm, onCancel }) {
@@ -34,7 +35,7 @@ export default function ClarificationForm({ questions, options, onConfirm, onCan
 
     return (
         <Modal open onClose={onCancel}>
-            <ModalDialog>
+            <ModalDialog sx={{ maxHeight: '85vh', overflow: 'hidden' }}>
                 <DialogTitle>Clarification Required</DialogTitle>
                 <DialogContent>Please answer the following questions to proceed.</DialogContent>
                 <form
@@ -44,28 +45,32 @@ export default function ClarificationForm({ questions, options, onConfirm, onCan
                     }}
                 >
                     <Stack spacing={2}>
-                        {questions.map((question, index) => (
-                            <FormControl key={question}>
-                                <FormLabel>{question}</FormLabel>
-                                {options && options[index] && options[index].length > 0 ? (
-                                    <Select
-                                        placeholder="Select an option..."
-                                        onChange={(e, newValue) => handleInputChange(question, newValue)}
-                                        required
-                                    >
-                                        {options[index].map(opt => (
-                                            <Option key={opt} value={opt}>{opt}</Option>
-                                        ))}
-                                    </Select>
-                                ) : (
-                                    <Input
-                                        placeholder="Your answer..."
-                                        onChange={(e) => handleInputChange(question, e.target.value)}
-                                        required
-                                    />
-                                )}
-                            </FormControl>
-                        ))}
+                        <Box sx={{ maxHeight: '60vh', overflow: 'auto', pr: 1 }}>
+                            <Stack spacing={2}>
+                                {questions.map((question, index) => (
+                                    <FormControl key={question}>
+                                        <FormLabel>{question}</FormLabel>
+                                        {options && options[index] && options[index].length > 0 ? (
+                                            <Select
+                                                placeholder="Select an option..."
+                                                onChange={(e, newValue) => handleInputChange(question, newValue)}
+                                                required
+                                            >
+                                                {options[index].map(opt => (
+                                                    <Option key={opt} value={opt}>{opt}</Option>
+                                                ))}
+                                            </Select>
+                                        ) : (
+                                            <Input
+                                                placeholder="Your answer..."
+                                                onChange={(e) => handleInputChange(question, e.target.value)}
+                                                required
+                                            />
+                                        )}
+                                    </FormControl>
+                                ))}
+                            </Stack>
+                        </Box>
                         <Button type="submit">Confirm</Button>
                     </Stack>
                 </form>
@@ -73,4 +78,3 @@ export default function ClarificationForm({ questions, options, onConfirm, onCan
         </Modal>
     );
 }
-

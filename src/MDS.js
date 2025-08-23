@@ -396,7 +396,7 @@ class CallSubmissionAndValidation {
 
         if (securityPolicy === Standards.securityPolicies.CHIEF_ONLY) {
             // Chief Only: Only the Chief can make this call
-            if (agent.rank !== Standards.agentRanks.CHIEF) {
+            if (agent.rank !== Standards.agentRanks.CHIEF && agent.rank !== Standards.agentRanks.WISH_CHIEF) {
                 const reason = `Call ${id} of type ${type} failed inspection: agent ${agentID} is not the Chief.`;
                 console.warn(`%c[System] [MDS] ${reason}`, "color: red;");
                 return { success: false, reason };
