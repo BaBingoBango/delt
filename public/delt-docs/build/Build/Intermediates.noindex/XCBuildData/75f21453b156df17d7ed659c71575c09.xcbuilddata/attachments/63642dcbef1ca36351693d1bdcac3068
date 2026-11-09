@@ -1,6 +1,0 @@
-framework module delt_docs {
-  umbrella header "delt_docs.h"
-  export *
-
-  module * { export * }
-}

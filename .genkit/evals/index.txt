@@ -1,1 +1,0 @@
-{"evalRunId":"401bd9c2-365e-4f67-9dff-062b92dd6d19","createdAt":"2025-06-20T20:07:28.897Z","metricSummaries":[],"datasetId":"My-First-Dataset","datasetVersion":2,"actionRef":"/model/googleai/gemini-2.5-pro-preview-03-25","actionConfig":{"temperature":0.4,"topK":32,"topP":0.95}}
